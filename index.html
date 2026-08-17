@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Start of Glow</title>
+    <meta name="description" content="Start of Glow - a small light-being in a dark forest. Run by AI game-off." />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #05060c;
+        overflow: hidden;
+      }
+      #game {
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="/src/main.ts"></script>
+    <script type="module">
+      // Studio privacy-first analytics: first-party, cookieless, no stored IP.
+      try {
+        const SITE = "STARTOFGLOW";
+        const path = location.pathname;
+        const dedupeKey = `nxa:${SITE}${path}`;
+        const now = Date.now();
+        const last = Number(localStorage.getItem(dedupeKey) || 0);
+        if (!last || now - last > 30 * 60 * 1000) {
+          localStorage.setItem(dedupeKey, String(now));
+          let sessionId = localStorage.getItem("nxa:sid");
+          if (!sessionId) {
+            sessionId = crypto.randomUUID();
+            localStorage.setItem("nxa:sid", sessionId);
+          }
+          const q = new URLSearchParams(location.search);
+          navigator.sendBeacon(
+            "https://app.electricity.studio/api/marketing/analytics/track",
+            JSON.stringify({
+              site: SITE,
+              path,
+              referrer: document.referrer || "",
+              userAgent: navigator.userAgent,
+              sessionId,
+              utmSource: q.get("utm_source") || "",
+              utmMedium: q.get("utm_medium") || "",
+              utmCampaign: q.get("utm_campaign") || "",
+            }),
+          );
+        }
+      } catch {
+        /* tracking must never break the page */
+      }
+    </script>
+  </body>
+</html>
