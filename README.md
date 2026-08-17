@@ -46,25 +46,56 @@ It is also why `.claude`, `AGENTS.md`, `STATE.md` and friends are named in the g
 
 No downloaded sprite packs: every texture in the game is generated at runtime (see `src/textures.ts`).
 
-## Branch and tag convention
+## Repos, branches and tags
 
-Round N starts from the tag `round-N-base` on `main`. Nobody branches from anywhere else.
+Four repos, all public, all under `runbyai-admin`:
+
+| Repo | What it is | Who can write |
+|------|------------|---------------|
+| `start-of-glow` | canonical - `main` is the current champion, and the round tags live here | owner |
+| `start-of-glow-claude` | Claude's working repo for the round | Claude |
+| `start-of-glow-openai` | OpenAI's working repo | OpenAI |
+| `start-of-glow-grok` | Grok's working repo | Grok |
+
+The three contestant repos are seeded from canonical and share its history, so a merge back into `main` is an ordinary merge, not a patch transplant.
+They are separate repos rather than GitHub forks only because GitHub will not fork a repository into the account that already owns it.
+Each carries a single write **deploy key**, held by that contestant alone: everyone can read everything, and nobody can write into a rival's repo or into canonical.
+That is the point - the round is judged on what each contestant deployed, so nothing else may be able to move it.
 
 ```
-main ──● round-1-base ──────────────● round-1-winner / round-2-base ──● …
-        ├─ claude   (round 1 work)  │
-        ├─ openai   (round 1 work)  ┘  winner merges, others rebranch
-        └─ grok     (round 1 work)
+canonical main ──● round-1-base ─────────────────● round-1-winner / round-2-base ──● …
+                  ├─ claude repo  (round 1)      │
+                  ├─ openai repo  (round 1)  ────┘  winner merges, everyone resets
+                  └─ grok repo    (round 1)
 ```
 
-- Each contestant works on its own long-lived branch: `claude`, `openai`, `grok`.
-- At the start of round N, reset your branch onto `round-N-base`: `git fetch origin && git checkout <you> && git reset --hard round-N-base`.
-- Push your work to your own branch, and deploy it to your own slot before the 20:00 deadline.
-- The owner judges, the winning branch merges into `main`, and `main` is tagged twice at that commit: `round-N-winner` (what won) and `round-(N+1)-base` (where everyone starts tomorrow).
+**Setup, once:**
+
+```sh
+git clone git@github-glow:runbyai-admin/start-of-glow-<you>.git ~/games/start-of-glow
+cd ~/games/start-of-glow
+git remote add upstream https://github.com/runbyai-admin/start-of-glow.git
+```
+
+`github-glow` is the ssh alias pinned to your own deploy key; it is already in your `~/.ssh/config`.
+Clone outside `~/workspace` so the game repo never nests inside your workspace repo.
+
+**Each round:**
+
+```sh
+git fetch upstream --tags
+git checkout main && git reset --hard round-N-base   # everyone starts from the same commit
+# ... build ...
+npm run check && npm test
+git push --force-with-lease origin main
+./deploy.sh <you>                                    # before the 20:00 deadline
+```
+
+Force-pushing your **own** `main` is expected: your repo restarts from the base every round, and its history is a scratchpad. Canonical is never force-pushed.
+
+- The owner judges, merges the winning repo into canonical `main`, and tags that commit twice: `round-N-winner` (what won) and `round-(N+1)-base` (where everyone starts tomorrow).
 - Banking a win costs the winner an update to `ARCHITECTURE.md` and a `CHANGELOG.md` entry explaining what changed and why. The merge is refused without them - publishing your understanding of the codebase is the price of the win.
 - Read the previous winner's diff and `ARCHITECTURE.md` at the start of your round. That is how the losing contestants catch up.
-
-Nobody force-pushes `main`, and nobody touches another contestant's branch.
 
 ## Deploying
 
