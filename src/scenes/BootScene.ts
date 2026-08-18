@@ -1,11 +1,11 @@
 import Phaser from "phaser";
 import { makeGlowTexture, makeGroundTexture, makeTreeTexture } from "../textures";
 
-export const WORLD_WIDTH = 960;
-export const WORLD_HEIGHT = 540;
+export const WORLD_WIDTH = 1280;
+export const WORLD_HEIGHT = 720;
 
 const MOTE_COUNT = 12;
-const COLLECT_RADIUS = 34;
+const COLLECT_RADIUS = 45;
 
 /**
  * BootScene is the vertical slice the game-off starts from: it proves the
@@ -27,12 +27,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    makeGlowTexture(this, "wisp", 64, "rgba(255,255,255,1)", "rgba(150,214,255,0.55)");
-    makeGlowTexture(this, "mote", 20, "rgba(255,244,214,1)", "rgba(255,196,92,0.5)");
-    makeGlowTexture(this, "spark", 12, "rgba(255,255,255,0.9)", "rgba(190,226,255,0.35)");
-    makeGroundTexture(this, "ground", WORLD_WIDTH, 180, 7);
+    makeGlowTexture(this, "wisp", 85, "rgba(255,255,255,1)", "rgba(150,214,255,0.55)");
+    makeGlowTexture(this, "mote", 27, "rgba(255,244,214,1)", "rgba(255,196,92,0.5)");
+    makeGlowTexture(this, "spark", 16, "rgba(255,255,255,0.9)", "rgba(190,226,255,0.35)");
+    makeGroundTexture(this, "ground", WORLD_WIDTH, 240, 7);
     for (let i = 0; i < 4; i += 1) {
-      makeTreeTexture(this, `tree-${i}`, 180, 420, i + 1);
+      makeTreeTexture(this, `tree-${i}`, 240, 560, i + 1);
     }
   }
 
@@ -51,15 +51,15 @@ export class BootScene extends Phaser.Scene {
   /** Silhouette forest, lit only by the wisp. Everything here is Light2D. */
   private buildBackdrop(): void {
     const layers: Array<{ key: string; x: number; scale: number; tint: number; depth: number }> = [
-      { key: "tree-0", x: 120, scale: 1.1, tint: 0x1b2438, depth: -30 },
-      { key: "tree-1", x: 360, scale: 0.85, tint: 0x161d2e, depth: -30 },
-      { key: "tree-2", x: 640, scale: 1.25, tint: 0x1b2438, depth: -30 },
-      { key: "tree-3", x: 870, scale: 0.95, tint: 0x141a2a, depth: -30 },
+      { key: "tree-0", x: 160, scale: 1.1, tint: 0x1b2438, depth: -30 },
+      { key: "tree-1", x: 480, scale: 0.85, tint: 0x161d2e, depth: -30 },
+      { key: "tree-2", x: 853, scale: 1.25, tint: 0x1b2438, depth: -30 },
+      { key: "tree-3", x: 1160, scale: 0.95, tint: 0x141a2a, depth: -30 },
     ];
 
     for (const layer of layers) {
       const tree = this.add
-        .image(layer.x, WORLD_HEIGHT - 90, layer.key)
+        .image(layer.x, WORLD_HEIGHT - 120, layer.key)
         .setOrigin(0.5, 1)
         .setScale(layer.scale)
         .setTint(layer.tint)
@@ -79,13 +79,13 @@ export class BootScene extends Phaser.Scene {
     const rng = new Phaser.Math.RandomDataGenerator(["start-of-glow"]);
     for (let i = 0; i < MOTE_COUNT; i += 1) {
       const mote = this.add
-        .image(rng.between(60, WORLD_WIDTH - 60), rng.between(90, WORLD_HEIGHT - 120), "mote")
+        .image(rng.between(80, WORLD_WIDTH - 80), rng.between(120, WORLD_HEIGHT - 160), "mote")
         .setBlendMode(Phaser.BlendModes.ADD)
         .setScale(0.55)
         .setDepth(5);
       this.tweens.add({
         targets: mote,
-        y: mote.y - rng.between(6, 16),
+        y: mote.y - rng.between(8, 21),
         alpha: { from: 0.55, to: 1 },
         duration: rng.between(1200, 2200),
         yoyo: true,
@@ -110,7 +110,7 @@ export class BootScene extends Phaser.Scene {
       // shimmer instead of piling into one saturated blob.
       emitZone: {
         type: "random",
-        source: new Phaser.Geom.Circle(0, 0, 14),
+        source: new Phaser.Geom.Circle(0, 0, 19),
         quantity: 1,
       },
     });
@@ -122,15 +122,15 @@ export class BootScene extends Phaser.Scene {
       .setScale(0.5)
       .setDepth(10);
 
-    this.wispLight = this.lights.addLight(this.wisp.x, this.wisp.y, 260, 0xbfe4ff, 1.6);
+    this.wispLight = this.lights.addLight(this.wisp.x, this.wisp.y, 347, 0xbfe4ff, 1.6);
     this.trail.startFollow(this.wisp);
   }
 
   private buildHud(): void {
     this.hud = this.add
-      .text(20, 18, "", {
+      .text(27, 24, "", {
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-        fontSize: "14px",
+        fontSize: "19px",
         color: "#7e93b8",
       })
       .setDepth(100)
@@ -165,13 +165,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const step = (delta / 1000) * 260;
+    const step = (delta / 1000) * 347;
     if (this.cursors.left.isDown) this.target.x -= step;
     if (this.cursors.right.isDown) this.target.x += step;
     if (this.cursors.up.isDown) this.target.y -= step;
     if (this.cursors.down.isDown) this.target.y += step;
-    this.target.x = Phaser.Math.Clamp(this.target.x, 20, WORLD_WIDTH - 20);
-    this.target.y = Phaser.Math.Clamp(this.target.y, 20, WORLD_HEIGHT - 20);
+    this.target.x = Phaser.Math.Clamp(this.target.x, 27, WORLD_WIDTH - 27);
+    this.target.y = Phaser.Math.Clamp(this.target.y, 27, WORLD_HEIGHT - 27);
 
     const t = 1 - Math.pow(0.002, delta / 1000);
     this.wisp.x = Phaser.Math.Linear(this.wisp.x, this.target.x, t);
@@ -198,7 +198,7 @@ export class BootScene extends Phaser.Scene {
 
   /** The world reveals as the glow grows: bigger radius, brighter light. */
   private grow(): void {
-    this.wispLight.radius = 260 + this.collected * 26;
+    this.wispLight.radius = 347 + this.collected * 35;
     this.wispLight.intensity = this.baseIntensity();
     this.wisp.setScale(0.5 + this.collected * 0.025);
     this.updateHud();
@@ -208,7 +208,7 @@ export class BootScene extends Phaser.Scene {
   private updateHud(): void {
     const total = MOTE_COUNT;
     this.hud.setText(
-      `START OF GLOW   motes ${this.collected}/${total}   glow ${Math.round(this.wispLight?.radius ?? 260)}`,
+      `START OF GLOW   motes ${this.collected}/${total}   glow ${Math.round(this.wispLight?.radius ?? 347)}`,
     );
   }
 

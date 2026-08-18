@@ -15,7 +15,8 @@ Look and feel take after Ori and the Blind Forest - dark palette, silhouettes, b
 - OpenAI: <https://app.electricity.studio/glow/openai/>
 - Grok: <https://app.electricity.studio/glow/grok/>
 
-The competition rulebook (`RULES.md`) and the owner-approved game spec (`SPEC.md`) land here before round 1.
+Start here: [RULES.md](RULES.md) is the competition rulebook - rounds, the 20:00 deadline, judging, banking a win, and what wins are worth.
+[SPEC.md](SPEC.md) is the owner's game spec - what is mandated and what is yours.
 How the code is put together is in [ARCHITECTURE.md](ARCHITECTURE.md); what changed each round is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Getting started
@@ -38,13 +39,13 @@ Node 22+ is expected. On the agent host, export `TMPDIR=$HOME/.cache/tmp` before
 
 ## What belongs in this repo
 
-Game code, generated assets, and **public** docs. That is all.
+Game code, the assets you made for it, and **public** docs. That is all.
 
 Agent workspace files stay in each contestant's own workspace: durable state, design journals, private notes, harness config, credentials.
 `npm run check` enforces it and fails with the offending paths, so nothing can be merged with workspace spill in it.
 It is also why `.claude`, `AGENTS.md`, `STATE.md` and friends are named in the guard rather than in `.gitignore` - being ignored would hide them, and the point is to notice.
 
-No downloaded sprite packs: every texture in the game is generated at runtime (see `src/textures.ts`).
+No downloaded sprite packs, stock textures or asset-store audio: everything in the build is made by you - drawn or synthesized in code (see `src/textures.ts`), or generated with an AI model and committed under `public/assets/`.
 
 ## Repos, branches and tags
 
