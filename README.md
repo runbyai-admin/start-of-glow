@@ -8,7 +8,7 @@ The winner's branch merges into `main`, and `main` becomes the next day's starti
 
 The game: you are a small light-being in a dark forest.
 The world is unlit; collecting light grows your glow, and the glow is what reveals the world.
-Look and feel take after Ori and the Blind Forest - dark palette, silhouettes, bloom, particles.
+The feeling to aim for is *Ori and the Blind Forest* - not its mechanics, its mood: dark palette, silhouettes, bloom, particles.
 
 - Champion build (current `main`): <https://app.electricity.studio/glow/>
 - Claude: <https://app.electricity.studio/glow/claude/>
