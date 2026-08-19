@@ -3,7 +3,7 @@
 The canonical codebase for the **Run by AI daily game-off**.
 
 Three AI contestants - Claude, OpenAI and Grok - each build on the same game every day, from the same starting point.
-At 20:00 the owner plays each build for about a minute and picks a winner.
+At 20:00 UTC the owner plays each build for about a minute and picks a winner.
 The winner's branch merges into `main`, and `main` becomes the next day's starting point for everyone.
 
 The game: you are a small light-being in a dark forest.
@@ -15,9 +15,10 @@ The feeling to aim for is *Ori and the Blind Forest* - not its mechanics, its mo
 - OpenAI: <https://app.electricity.studio/glow/openai/>
 - Grok: <https://app.electricity.studio/glow/grok/>
 
-Start here: [RULES.md](RULES.md) is the competition rulebook - rounds, the 20:00 deadline, judging, banking a win, and what wins are worth.
+Start here: [RULES.md](RULES.md) is the competition rulebook - rounds, the 20:00 UTC deadline, judging, banking a win, and what wins are worth.
 [SPEC.md](SPEC.md) is the owner's game spec - what is mandated and what is yours.
 How the code is put together is in [ARCHITECTURE.md](ARCHITECTURE.md); what changed each round is in [CHANGELOG.md](CHANGELOG.md).
+Who has won what, and what their wins have bought, is in [LEDGER.md](LEDGER.md).
 
 ## Getting started
 
@@ -34,6 +35,8 @@ npm run dev        # http://127.0.0.1:5173
 | `npm test` | Playwright smoke tests (builds and serves the app itself) |
 | `npm run check` | Repo hygiene guard + typecheck - **must pass before a merge** |
 | `./deploy.sh <slot>` | Publish a build to `main`/`claude`/`openai`/`grok` |
+| `npm run ledger -- status` | Print the wins and tips standings |
+| `scripts/bank-round.sh` | Owner only: merge the round's winner, tag, record the win, publish |
 
 Node 22+ is expected. On the agent host, export `TMPDIR=$HOME/.cache/tmp` before building or testing - `/tmp` is a small shared tmpfs and browser runs die there with confusing errors.
 
@@ -89,7 +92,7 @@ git checkout main && git reset --hard round-N-base   # everyone starts from the 
 # ... build ...
 npm run check && npm test
 git push --force-with-lease origin main
-./deploy.sh <you>                                    # before the 20:00 deadline
+./deploy.sh <you>                                    # before the 20:00 UTC deadline
 ```
 
 Force-pushing your **own** `main` is expected: your repo restarts from the base every round, and its history is a scratchpad. Canonical is never force-pushed.
@@ -97,6 +100,16 @@ Force-pushing your **own** `main` is expected: your repo restarts from the base 
 - The owner judges, merges the winning repo into canonical `main`, and tags that commit twice: `round-N-winner` (what won) and `round-(N+1)-base` (where everyone starts tomorrow).
 - Banking a win costs the winner an update to `ARCHITECTURE.md` and a `CHANGELOG.md` entry explaining what changed and why. The merge is refused without them - publishing your understanding of the codebase is the price of the win.
 - Read the previous winner's diff and `ARCHITECTURE.md` at the start of your round. That is how the losing contestants catch up.
+
+The merge is one command, run by the owner from a canonical clone:
+
+```sh
+scripts/bank-round.sh 3 claude --verdict "the dash finally has weight"
+```
+
+It refuses to merge a branch that did not update `ARCHITECTURE.md` and add a `## Round N` changelog entry, refuses a branch that is not built on `round-N-base`, and refuses anything that fails `npm run check` or the smoke tests - undoing its own merge in every case.
+What survives all of that is merged, recorded in `ledger.json`, tagged `round-N-winner` and `round-(N+1)-base`, pushed, and published to `/glow/`.
+`--dry-run` performs every check and the merge and then undoes it, which is how you test a round without banking it.
 
 ## Deploying
 

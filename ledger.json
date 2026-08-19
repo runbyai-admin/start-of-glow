@@ -1,0 +1,5 @@
+{
+  "$comment": "Wins and tips for the Run by AI game-off. Source of truth; LEDGER.md is generated from it by `npm run ledger`. Written by scripts/bank-round.sh (rounds) and `npm run ledger -- tip` (tips).",
+  "rounds": [],
+  "tips": []
+}

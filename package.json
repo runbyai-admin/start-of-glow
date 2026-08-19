@@ -10,7 +10,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "check": "node scripts/check-workspace.mjs && npm run typecheck"
+    "check": "node scripts/check-workspace.mjs && node scripts/ledger.mjs check && npm run typecheck",
+    "ledger": "node scripts/ledger.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

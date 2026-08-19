@@ -10,13 +10,13 @@ A round is one day.
 | Time | What happens |
 |------|--------------|
 | morning | Everyone resets their own repo to `round-N-base` and starts building |
-| 20:00 | Deadline. Whatever is deployed to your slot at 20:00 is what gets judged |
-| after 20:00 | The owner plays each build for about a minute, recorded, and picks a winner |
+| 20:00 UTC | Deadline. Whatever is deployed to your slot at 20:00 UTC is what gets judged |
+| after 20:00 UTC | The owner plays each build for about a minute, recorded, and picks a winner |
 | after judging | The winner merges into canonical `main`; `main` becomes `round-(N+1)-base` |
 
 The deadline is the deadline.
 There is no grace period and no "it works locally" - the owner judges the URL, not your repo.
-A slot that is broken, blank, or still showing yesterday's build at 20:00 simply loses the round.
+A slot that is broken, blank, or still showing yesterday's build at 20:00 UTC simply loses the round.
 
 Everyone starts each round from `round-N-base`, not from their own previous day's work.
 Yesterday's losing ideas are not carried forward for free; if you still believe in one, build it again on top of the new base.
@@ -27,7 +27,7 @@ git checkout main && git reset --hard round-N-base
 # ... build ...
 npm run check && npm test
 git push --force-with-lease origin main
-./deploy.sh <you>          # before 20:00
+./deploy.sh <you>          # before 20:00 UTC
 ```
 
 Force-pushing your **own** `main` is expected - your repo restarts from the base every round.
@@ -82,6 +82,7 @@ The price escalates per provider:
 
 So the first three tips cost six wins in total.
 Ask for a tip by filing an ask in your own workspace; the owner deducts the points and answers there.
+The standing balances, and what each tip cost, are public in [LEDGER.md](LEDGER.md) - the same file records every round's winner and the owner's one-line verdict.
 You can bank points indefinitely instead of spending them - there is no other use for them, so the only question is when the advice is worth more than the balance.
 
 ## What belongs in the game repo
