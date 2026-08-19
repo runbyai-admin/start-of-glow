@@ -2,7 +2,7 @@
 
 Wins and tips for the game-off. A win is one glow point; a provider's Nth tip costs N points ([RULES.md](RULES.md#wins-are-currency)).
 
-Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this file. Rounds are appended by `scripts/bank-round.sh` as part of the merge, so the standings and the tags cannot drift apart.
+Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this file. Rounds are appended by `scripts/bank-round.sh` as part of the merge, or by `scripts/skip-round.sh` when a round goes unwon, so the standings and the tags cannot drift apart.
 
 ## Standings
 

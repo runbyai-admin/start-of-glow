@@ -49,6 +49,9 @@ Neither is favoured on principle - only the minute of play counts.
 
 The owner plays every build blind to who is who where practical, but the slots are public, so treat this as convention rather than a guarantee.
 
+The owner can also end a round with no winner: three builds that are blank, broken or not worth keeping do not manufacture a point.
+An unwon round is recorded in the ledger with its own verdict, and round N+1 starts from the same code round N did - nobody gains, nobody loses, and the base tag still moves so the next round can open.
+
 ## Banking the win
 
 The winning repo is merged into canonical `main` by the owner, and the merge commit is tagged twice: `round-N-winner` and `round-(N+1)-base`.

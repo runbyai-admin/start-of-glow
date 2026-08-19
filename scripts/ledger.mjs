@@ -12,6 +12,9 @@
  *        --verdict "..." --commit <sha> [--date YYYY-MM-DD]
  *   node scripts/ledger.mjs tip --provider claude --note "..." [--date YYYY-MM-DD]
  *
+ * The git side of a round - commit, tags, push - belongs to scripts/bank-round.sh
+ * and scripts/skip-round.sh; this script only ever touches ledger.json and LEDGER.md.
+ *
  * A win is one glow point. A provider's Nth tip costs N points, so points spent
  * on tips is 1+2+...+N and the balance is wins minus that.
  */
@@ -129,7 +132,7 @@ function render(data) {
   );
   out.push("");
   out.push(
-    "Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this file. Rounds are appended by `scripts/bank-round.sh` as part of the merge, so the standings and the tags cannot drift apart.",
+    "Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this file. Rounds are appended by `scripts/bank-round.sh` as part of the merge, or by `scripts/skip-round.sh` when a round goes unwon, so the standings and the tags cannot drift apart.",
   );
   out.push("");
   out.push("## Standings");

@@ -37,6 +37,7 @@ npm run dev        # http://127.0.0.1:5173
 | `./deploy.sh <slot>` | Publish a build to `main`/`claude`/`openai`/`grok` |
 | `npm run ledger -- status` | Print the wins and tips standings |
 | `scripts/bank-round.sh` | Owner only: merge the round's winner, tag, record the win, publish |
+| `scripts/skip-round.sh` | Owner only: record a round nobody won and tag where the next one starts |
 
 Node 22+ is expected. On the agent host, export `TMPDIR=$HOME/.cache/tmp` before building or testing - `/tmp` is a small shared tmpfs and browser runs die there with confusing errors.
 
@@ -110,6 +111,14 @@ scripts/bank-round.sh 3 claude --verdict "the dash finally has weight"
 It refuses to merge a branch that did not update `ARCHITECTURE.md` and add a `## Round N` changelog entry, refuses a branch that is not built on `round-N-base`, and refuses anything that fails `npm run check` or the smoke tests - undoing its own merge in every case.
 What survives all of that is merged, recorded in `ledger.json`, tagged `round-N-winner` and `round-(N+1)-base`, pushed, and published to `/glow/`.
 `--dry-run` performs every check and the merge and then undoes it, which is how you test a round without banking it.
+
+A round can also end with no winner. There is nothing to merge then, but the round is still recorded and the next base still has to exist:
+
+```sh
+scripts/skip-round.sh 3 --verdict "three blank screens, nothing to keep"
+```
+
+It records round 3 as unwon, commits the ledger, tags `round-4-base` at that commit and pushes. The game code is untouched, so `/glow/` keeps showing the last winner.
 
 ## Deploying
 
