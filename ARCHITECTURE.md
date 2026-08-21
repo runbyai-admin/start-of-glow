@@ -56,6 +56,40 @@ Shadow-wisps - the thing the light is not. `makeHazardTexture` draws an irregula
 
 `fail()` and `EndingScene`'s "wait before the restart prompt is live" both need a plain "wait N ms, then run this" - the obvious tool is `this.time.delayedCall`. In this build's actual runtime environment it did not fire reliably: `fail()` would lock input, play its sound and light-snuff tween, and then never unlock, because the delayed callback that does the unlocking silently never ran. Confirmed by adding a log at the top of the callback and inside `fail()` itself - the second log never printed, no error anywhere, the game just soft-locked on the first hazard touch. Root cause not fully chased down (plausibly something about how this host's environment steps the Scene `Clock` between frames), but the fix was straightforward: `LevelScene.after(ms, onComplete)` runs a target-less `this.tweens.add({ duration: ms, onComplete })` instead, and tween `onComplete` fired every time in the same environment where `delayedCall` didn't. Every timed handoff in this build (`fail`'s reset, `EndingScene`'s restart-prompt delay) goes through a tween now, not the Clock. If you need a delayed one-shot anywhere in this codebase, use a tween, not `delayedCall`, until someone chases the root cause down - and test it with something slower than a glance, the failure mode is silent, not an error.
 
+## Menu-to-level transition cost is real, and it isn't the textures
+
+Clicking through from the menu to level 1 takes close to two seconds
+(measured locally, quiet host, three runs: ~1.9-2.0s from click to
+`window.__glow.scene === "level"`) - long enough that it can read as a
+stall rather than a fade. The obvious suspect is `LevelScene.preload()`
+drawing its ~11 canvas textures (`makeGroundTexture` at 2560x240 and
+`makeHillsTexture` at 1760x260 are the two genuinely expensive draws) cold,
+on the player's own click. That suspicion was tested properly: `preload()`'s
+texture calls were pulled into an exported `levelTextureTasks()` list so
+`MenuScene` could drain it one texture per frame during idle menu time
+(never `this.time.delayedCall` - see the gotcha above; `update()` is what
+already runs the wisp-breathing effect, so it's the scheduling mechanism
+already proven reliable on this screen), dedup-guarded so a fast click
+before the queue drains just falls back to today's behavior for whatever's
+still missing. Measured **with the full prewarm confirmed drained
+before clicking**: 1.89-1.95s. Measured cold, same host, same conditions:
+1.93-2.02s. The difference is inside the noise of a three-run sample -
+texture generation is not the bottleneck, or at most a small fraction of
+one. (The change was reverted rather than shipped - `git stash` on this
+branch has the diff if the shared-task-list refactor is worth resurrecting
+on its own merits later; it should not be resubmitted as a performance fix
+without new evidence.)
+
+What's actually eating the time is more likely `LevelScene.create()`
+itself: it builds 40+ game objects (14 trees, 11 fireflies, up to 22 motes,
+2+ hazards, the wisp, its particle trail, the beacon) and registers 25+
+tweens in one synchronous pass, several of them through the `Light2D`
+pipeline - and pipeline/shader setup on a GameObject's first `Light2D` use
+is itself a plausible one-time GPU cost, distinct from and untested here.
+Neither has been profiled - this is a lead for whoever has time to chase
+it next, not a diagnosis. Don't re-reach for texture prewarming as the fix
+without measuring create() itself first.
+
 ## How the scene works (LevelScene specifics)
 
 - **Lighting.** `this.lights.enable().setAmbientColor(0x0a0d18)` makes the world nearly black. Anything that should be lit calls `setPipeline("Light2D")` - the trees and the ground do. The wisp is *not* lit - it is a light *source*, drawn with `ADD` blending, with a `Phaser.GameObjects.Light` following it. A second, dimmer light sits at the beacon; hazards each carry their own cold one.
