@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
  * this one passing, a build that fails it is not playable.
  */
 
-test("boot scene comes up with the light pipeline running", async ({ page }) => {
+function collectConsoleErrors(page: import("@playwright/test").Page): string[] {
   const consoleErrors: string[] = [];
   page.on("console", (msg) => {
     // "Failed to load resource" carries no URL, so bad responses are checked
@@ -25,6 +25,11 @@ test("boot scene comes up with the light pipeline running", async ({ page }) => 
       consoleErrors.push(`${res.status()} ${res.url()}`);
     }
   });
+  return consoleErrors;
+}
+
+test("the title screen comes up with the light pipeline running", async ({ page }) => {
+  const consoleErrors = collectConsoleErrors(page);
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
@@ -34,24 +39,34 @@ test("boot scene comes up with the light pipeline running", async ({ page }) => 
 
   const state = await page.evaluate(() => window.__glow);
   expect(state?.ready).toBe(true);
+  expect(state?.scene).toBe("menu");
   expect(state?.lightsActive).toBe(true);
-  expect(state?.remaining).toBeGreaterThan(0);
 
-  await page.screenshot({ path: "test-results/boot-scene.png" });
+  await page.screenshot({ path: "test-results/menu.png" });
   expect(consoleErrors, `console errors: ${consoleErrors.join(" | ")}`).toEqual([]);
 });
 
-test("the light-being follows input and collects motes", async ({ page }) => {
+test("starting the game loads level 1, and the light-being follows input and collects motes", async ({ page }) => {
+  const consoleErrors = collectConsoleErrors(page);
+
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector("body[data-game-ready='true']", { timeout: 30_000 });
 
   const canvas = page.locator("canvas");
-  const box = await canvas.boundingBox();
+  let box = await canvas.boundingBox();
   expect(box).not.toBeNull();
+
+  // Any input starts the game from the title screen.
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.waitForFunction(() => window.__glow?.scene === "level", { timeout: 5_000 });
+
+  box = await canvas.boundingBox();
   const { x, y, width, height } = box!;
 
   // Sweep the pointer across the scene; the wisp chases it and eats whatever
-  // motes it passes through.
+  // motes it passes through. A second click part-way through re-centres the
+  // sweep so it does not spend the whole pass right at the level's start
+  // point, where the level places no motes.
   for (let i = 0; i <= 24; i += 1) {
     const px = x + (width * i) / 24;
     const py = y + height * (0.25 + 0.5 * Math.abs(Math.sin(i / 3)));
@@ -62,8 +77,11 @@ test("the light-being follows input and collects motes", async ({ page }) => {
   await page.waitForTimeout(200);
 
   const state = await page.evaluate(() => window.__glow);
+  expect(state?.scene).toBe("level");
+  expect(state?.level).toBe(1);
   expect(state?.collected, "the sweep should have collected at least one mote").toBeGreaterThan(0);
   expect(state?.glowRadius).toBeGreaterThan(260);
 
-  await page.screenshot({ path: "test-results/after-input.png" });
+  await page.screenshot({ path: "test-results/level-1-after-input.png" });
+  expect(consoleErrors, `console errors: ${consoleErrors.join(" | ")}`).toEqual([]);
 });
