@@ -95,7 +95,7 @@ export class LevelScene extends Phaser.Scene {
     makeGlowTexture(this, "firefly", 12, "rgba(226,255,196,1)", "rgba(198,255,130,0.4)");
     makeGlowTexture(this, "beacon", 170, "rgba(255,226,168,1)", "rgba(255,182,102,0.4)");
     makeGlowTexture(this, "shadow-spark", 10, "rgba(150,110,220,0.85)", "rgba(90,50,150,0.3)");
-    makeHazardTexture(this, "hazard", 30, this.config.index * 97);
+    makeHazardTexture(this, `hazard-${this.config.index}`, 30, this.config.index * 97);
     makeSkyTexture(this, "sky", VIEW_WIDTH, VIEW_HEIGHT, 11);
     makeHillsTexture(this, "hills", 1760, 260, 3);
     makeGroundTexture(this, "ground", WORLD_WIDTH, 240, 7);
@@ -271,7 +271,10 @@ export class LevelScene extends Phaser.Scene {
 
     const rng = new Phaser.Math.RandomDataGenerator([`start-of-glow-hazards-${this.config.index}`]);
     for (let i = 0; i < this.config.hazardCount; i += 1) {
-      const img = this.add.image(0, 0, "hazard").setDepth(6).setScale(rng.realInRange(0.85, 1.15));
+      const img = this.add
+        .image(0, 0, `hazard-${this.config.index}`)
+        .setDepth(6)
+        .setScale(rng.realInRange(0.85, 1.15));
       const light = this.lights.addLight(0, 0, 130, 0x9a6efa, 0.9);
       this.hazards.push({ img, light });
 
