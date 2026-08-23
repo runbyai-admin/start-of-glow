@@ -21,6 +21,22 @@ const START_Y = WORLD_HEIGHT * 0.62;
 const RESPAWN_GRACE_MS = 1100;
 const TREE_COUNT = 14;
 const FIREFLY_COUNT = 11;
+/**
+ * Shared speed cap, keyboard and mouse alike - see the note in update().
+ * Raised from the old keyboard-only 347 once capping mouse input to that
+ * same number exposed it as too slow for a cursor-chasing light: closing a
+ * full 1280px viewport width took ~3.7s and made ordinary repositioning
+ * feel sluggish, not just hazard-avoidance fair. 480 keeps a real, equal
+ * cap for both inputs (still finite, unlike the old unbounded mouse case)
+ * while staying comfortably above every level's hazardSpeed (4x the
+ * fastest, level 3's 120) so avoidance is still a real skill, not a freebie.
+ */
+const WISP_MAX_SPEED = 480;
+/** How close a hazard lets the player linger before it notices - see checkHazardAlerts(). */
+const ALERT_RADIUS = HAZARD_RADIUS * 2.6;
+const ALERT_TIME_SCALE = 1.55;
+const ALERT_LIGHT_INTENSITY = 1.55;
+const CALM_LIGHT_INTENSITY = 0.9;
 
 interface LevelInitData {
   levelIndex: number;
@@ -57,7 +73,12 @@ export class LevelScene extends Phaser.Scene {
 
   private moteConfigs: Array<{ x: number; y: number }> = [];
   private motes: Phaser.GameObjects.Image[] = [];
-  private hazards: Array<{ img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light }> = [];
+  private hazards: Array<{
+    img: Phaser.GameObjects.Image;
+    light: Phaser.GameObjects.Light;
+    tween?: Phaser.Tweens.Tween;
+    alert: boolean;
+  }> = [];
 
   private hud!: Phaser.GameObjects.Text;
   private levelCard!: Phaser.GameObjects.Text;
@@ -275,8 +296,9 @@ export class LevelScene extends Phaser.Scene {
         .image(0, 0, `hazard-${this.config.index}`)
         .setDepth(6)
         .setScale(rng.realInRange(0.85, 1.15));
-      const light = this.lights.addLight(0, 0, 130, 0x9a6efa, 0.9);
-      this.hazards.push({ img, light });
+      const light = this.lights.addLight(0, 0, 130, 0x9a6efa, CALM_LIGHT_INTENSITY);
+      const hazard = { img, light, alert: false };
+      this.hazards.push(hazard);
 
       const waypoints: Phaser.Math.Vector2[] = [];
       const legs = 3;
@@ -287,20 +309,39 @@ export class LevelScene extends Phaser.Scene {
       }
       img.setPosition(waypoints[0].x, waypoints[0].y);
       light.setPosition(waypoints[0].x, waypoints[0].y);
-      this.patrol(img, light, waypoints, 0);
+      this.patrol(hazard, waypoints, 0);
+    }
+  }
+
+  /**
+   * A shadow-wisp that has noticed the player: closer than ALERT_RADIUS for
+   * even one frame speeds it up (via the running patrol tween's timeScale,
+   * not a rewritten path - still fully deterministic for a fixed play, just
+   * reactive to it) and brightens its own light as a fair "it sees you"
+   * telegraph. Patrol *shape* never changes, only its pace and how visible
+   * it is - a hazard should feel alive without ever feeling like it cheated.
+   */
+  private checkHazardAlerts(): void {
+    for (const h of this.hazards) {
+      const dist = Phaser.Math.Distance.Between(h.img.x, h.img.y, this.wisp.x, this.wisp.y);
+      const alert = dist <= ALERT_RADIUS;
+      if (alert === h.alert) continue;
+      h.alert = alert;
+      if (h.tween) h.tween.timeScale = alert ? ALERT_TIME_SCALE : 1;
+      h.light.intensity = alert ? ALERT_LIGHT_INTENSITY : CALM_LIGHT_INTENSITY;
     }
   }
 
   private patrol(
-    img: Phaser.GameObjects.Image,
-    light: Phaser.GameObjects.Light,
+    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean },
     waypoints: Phaser.Math.Vector2[],
     index: number,
   ): void {
+    const { img, light } = hazard;
     const next = waypoints[(index + 1) % waypoints.length];
     const dist = Phaser.Math.Distance.Between(img.x, img.y, next.x, next.y);
     const duration = (dist / this.config.hazardSpeed) * 1000;
-    this.tweens.add({
+    hazard.tween = this.tweens.add({
       targets: img,
       x: next.x,
       y: next.y,
@@ -309,9 +350,10 @@ export class LevelScene extends Phaser.Scene {
       onUpdate: () => light.setPosition(img.x, img.y),
       onComplete: () => {
         if (!img.active) return;
-        this.patrol(img, light, waypoints, index + 1);
+        this.patrol(hazard, waypoints, index + 1);
       },
     });
+    if (hazard.alert) hazard.tween.timeScale = ALERT_TIME_SCALE;
   }
 
   private buildCamera(): void {
@@ -397,7 +439,8 @@ export class LevelScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     if (this.locked) return;
 
-    const step = (delta / 1000) * 347;
+    const dt = delta / 1000;
+    const step = dt * WISP_MAX_SPEED;
     if (this.cursors.left.isDown) this.target.x -= step;
     if (this.cursors.right.isDown) this.target.x += step;
     if (this.cursors.up.isDown) this.target.y -= step;
@@ -405,19 +448,40 @@ export class LevelScene extends Phaser.Scene {
     this.target.x = Phaser.Math.Clamp(this.target.x, 27, WORLD_WIDTH - 27);
     this.target.y = Phaser.Math.Clamp(this.target.y, 27, WORLD_HEIGHT - 27);
 
-    const t = 1 - Math.pow(0.002, delta / 1000);
-    this.wisp.x = Phaser.Math.Linear(this.wisp.x, this.target.x, t);
-    this.wisp.y = Phaser.Math.Linear(this.wisp.y, this.target.y, t);
+    // Ease toward the target (the trailing, gliding feel), but then clamp
+    // the actual distance covered this frame to WISP_MAX_SPEED. Pointer
+    // input sets `target` straight to the cursor's world position with no
+    // distance limit of its own, which - unclamped - let a single mouse
+    // flick close far more ground per frame than the keyboard's own capped
+    // step ever could, making hazard avoidance an accident of input device
+    // rather than a designed difficulty curve. For ordinary small movements
+    // the eased step is already under the cap, so this only ever bites the
+    // extreme case, not the everyday trailing feel.
+    const easeT = 1 - Math.pow(0.002, dt);
+    const easedX = Phaser.Math.Linear(this.wisp.x, this.target.x, easeT);
+    const easedY = Phaser.Math.Linear(this.wisp.y, this.target.y, easeT);
+    let dx = easedX - this.wisp.x;
+    let dy = easedY - this.wisp.y;
+    const moveDist = Math.sqrt(dx * dx + dy * dy);
+    const maxStep = WISP_MAX_SPEED * dt;
+    if (moveDist > maxStep && moveDist > 0) {
+      const scale = maxStep / moveDist;
+      dx *= scale;
+      dy *= scale;
+    }
+    this.wisp.x += dx;
+    this.wisp.y += dy;
     this.wispLight.setPosition(this.wisp.x, this.wisp.y);
     this.hazardTrail.setPosition(0, 0);
 
     const breathe = Math.sin(time * 0.0007) * 0.12;
-    this.pulseBoost = Phaser.Math.Linear(this.pulseBoost, 0, 1 - Math.pow(0.001, delta / 1000));
+    this.pulseBoost = Phaser.Math.Linear(this.pulseBoost, 0, 1 - Math.pow(0.001, dt));
     this.wispLight.intensity = this.baseIntensity() + breathe + this.pulseBoost;
 
     for (const h of this.hazards) {
       this.hazardTrail.emitParticleAt(h.img.x, h.img.y, 1);
     }
+    this.checkHazardAlerts();
 
     if (time > this.graceUntil) {
       this.checkHazardCollisions();

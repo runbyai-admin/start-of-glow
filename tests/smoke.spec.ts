@@ -67,11 +67,19 @@ test("starting the game loads level 1, and the light-being follows input and col
   // motes it passes through. A second click part-way through re-centres the
   // sweep so it does not spend the whole pass right at the level's start
   // point, where the level places no motes.
-  for (let i = 0; i <= 24; i += 1) {
-    const px = x + (width * i) / 24;
-    const py = y + height * (0.25 + 0.5 * Math.abs(Math.sin(i / 3)));
+  //
+  // Step count and per-step wait give the wisp real time to cover real
+  // ground: the wisp's speed is capped (WISP_MAX_SPEED in LevelScene.ts,
+  // shared between keyboard and mouse input as of the movement-fairness fix
+  // - see that file's note), so a full-viewport sweep now takes several
+  // real seconds rather than the near-instant catch-up unbounded mouse
+  // input used to allow. 40 steps * 90ms = 3.6s, comfortably above the
+  // ~2.7s a capped wisp needs to cross the full 1280px viewport width once.
+  for (let i = 0; i <= 40; i += 1) {
+    const px = x + (width * i) / 40;
+    const py = y + height * (0.25 + 0.5 * Math.abs(Math.sin(i / 5)));
     await page.mouse.move(px, py);
-    await page.waitForTimeout(60);
+    await page.waitForTimeout(90);
   }
   await page.mouse.click(x + width / 2, y + height / 2);
   await page.waitForTimeout(200);

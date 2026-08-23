@@ -14,9 +14,12 @@ interface EndingInitData {
  * at full scale, uninterrupted. Wordless except for one short line, per
  * SPEC.md's "text is a fallback, not a feature."
  */
+const BEST_RESETS_KEY = "start-of-glow-best-resets";
+
 export class EndingScene extends Phaser.Scene {
   private ambience!: Ambience;
   private resets = 0;
+  private isNewBest = false;
 
   constructor() {
     super("ending");
@@ -25,6 +28,27 @@ export class EndingScene extends Phaser.Scene {
   init(data: EndingInitData): void {
     this.ambience = data.ambience;
     this.resets = data.resets ?? 0;
+    this.isNewBest = this.recordBest(this.resets);
+  }
+
+  /**
+   * localStorage only, no backend, no account - the whole game already has
+   * neither. Only worth celebrating against a PRIOR run: a first-ever clear
+   * quietly sets the baseline rather than announcing a "best" with nothing
+   * to compare against. Wrapped defensively - private browsing or storage
+   * being unavailable should never be able to break the ending.
+   */
+  private recordBest(resets: number): boolean {
+    try {
+      const raw = window.localStorage.getItem(BEST_RESETS_KEY);
+      const prevBest = raw === null ? null : Number(raw);
+      const hadPrior = prevBest !== null && Number.isFinite(prevBest);
+      const isBest = !hadPrior || resets < (prevBest as number);
+      if (isBest) window.localStorage.setItem(BEST_RESETS_KEY, String(resets));
+      return hadPrior && isBest;
+    } catch {
+      return false;
+    }
   }
 
   preload(): void {
@@ -72,8 +96,12 @@ export class EndingScene extends Phaser.Scene {
       .setDepth(20);
     this.tweens.add({ targets: line, alpha: 0.75, duration: 1400, delay: 2400, ease: "Sine.easeOut" });
 
+    const baseLine =
+      this.resets > 0
+        ? `the dark caught you ${this.resets} time${this.resets === 1 ? "" : "s"} on the way here`
+        : "not once did the dark catch you";
     const resetsLine = this.add
-      .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.87, this.resets > 0 ? `the dark caught you ${this.resets} time${this.resets === 1 ? "" : "s"} on the way here` : "not once did the dark catch you", {
+      .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.87, this.isNewBest ? `${baseLine} - fewest yet` : baseLine, {
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         fontSize: "14px",
         color: "#3a2f1c",
