@@ -111,6 +111,13 @@ export class MenuScene extends Phaser.Scene {
       lightsActive: this.lights.active,
       level: 0,
       resets: 0,
+      required: 0,
+      beaconOpen: false,
+      flawless: 0,
+      wispX: 0,
+      wispY: 0,
+      motes: [],
+      hazards: [],
     };
   }
 }

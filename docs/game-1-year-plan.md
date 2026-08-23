@@ -1,8 +1,8 @@
 # Start of Glow: a one-year plan
 
-Written 2026-08-24, in response to the owner's notice extending the round-2 window and asking for two
-things: real depth in the gameplay itself, and a genuine plan for where this goes over a year - not a
-task list for tomorrow.
+Written 2026-08-23 (dated 08-24 in its first commit by mistake), in response to the owner's notice
+extending the round-2 window and asking for two things: real depth in the gameplay itself, and a genuine
+plan for where this goes over a year - not a task list for tomorrow.
 
 ## What kind of plan this actually is
 

@@ -17,6 +17,9 @@ export class Ambience {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private unlocked = false;
+  private stormDesired = false;
+  private stormGain: GainNode | null = null;
+  private stormLfoGain: GainNode | null = null;
 
   unlock(): void {
     if (this.unlocked) return;
@@ -32,6 +35,7 @@ export class Ambience {
       this.ctx = ctx;
       this.master = master;
       this.startDrone(ctx, master);
+      this.applyStorm();
     } catch {
       this.ctx = null;
       this.master = null;
@@ -169,14 +173,54 @@ export class Ambience {
     }
   }
 
-  /** A quick rising arpeggio - the level-complete payoff. */
-  levelComplete(): void {
+  /**
+   * The beacon has opened - a low, warm two-note call, quieter than the
+   * level-complete run. It marks the moment going becomes allowed, which is
+   * what makes skipping the remaining motes a legible choice.
+   */
+  beaconOpen(): void {
     if (!this.ctx || !this.master) return;
     try {
       const ctx = this.ctx;
       const master = this.master;
       const now = ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.5];
+      const notes: Array<[frequency: number, start: number]> = [
+        [261.63, 0],
+        [392.0, 0.16],
+      ];
+      for (const [freq, offset] of notes) {
+        const start = now + offset;
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(0.12, start + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.2);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.start(start);
+        osc.stop(start + 1.25);
+      }
+    } catch {
+      /* atmosphere only */
+    }
+  }
+
+  /**
+   * A quick rising arpeggio - the level-complete payoff. A flawless level
+   * (every mote found, not just the required ones) earns two extra steps up:
+   * the fuller run is the reward for greed that paid off.
+   */
+  levelComplete(flawless = false): void {
+    if (!this.ctx || !this.master) return;
+    try {
+      const ctx = this.ctx;
+      const master = this.master;
+      const now = ctx.currentTime;
+      const notes = flawless
+        ? [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98]
+        : [523.25, 659.25, 783.99, 1046.5];
       notes.forEach((freq, i) => {
         const start = now + i * 0.09;
         const osc = ctx.createOscillator();
@@ -191,6 +235,95 @@ export class Ambience {
         osc.start(start);
         osc.stop(start + 0.75);
       });
+    } catch {
+      /* atmosphere only */
+    }
+  }
+
+  /**
+   * The storm-dark weather bed: looping filtered noise with a slow gust LFO,
+   * faded in for level 3 and back out everywhere else. Built lazily on first
+   * use (and deferred until unlock() if requested before audio exists);
+   * "off" also zeroes the LFO depth so the bed is truly silent, not
+   * oscillating around zero.
+   */
+  setStorm(on: boolean): void {
+    this.stormDesired = on;
+    this.applyStorm();
+  }
+
+  private applyStorm(): void {
+    if (!this.ctx || !this.master) return;
+    try {
+      const ctx = this.ctx;
+      if (!this.stormGain) {
+        const size = Math.floor(ctx.sampleRate * 2);
+        const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < size; i += 1) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.loop = true;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.value = 420;
+        filter.Q.value = 0.65;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 0.13;
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 0;
+        lfo.connect(lfoGain);
+        lfoGain.connect(gain.gain);
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+        src.start();
+        lfo.start();
+        this.stormGain = gain;
+        this.stormLfoGain = lfoGain;
+      }
+      const now = ctx.currentTime;
+      this.stormGain.gain.cancelScheduledValues(now);
+      this.stormGain.gain.setTargetAtTime(this.stormDesired ? 0.055 : 0, now, 0.8);
+      this.stormLfoGain!.gain.cancelScheduledValues(now);
+      this.stormLfoGain!.gain.setTargetAtTime(this.stormDesired ? 0.018 : 0, now, 0.8);
+    } catch {
+      /* atmosphere only */
+    }
+  }
+
+  /** Distant thunder for the storm flicker: a soft, low-passed noise swell. */
+  rumble(): void {
+    if (!this.ctx || !this.master) return;
+    try {
+      const ctx = this.ctx;
+      const master = this.master;
+      const now = ctx.currentTime;
+      const duration = 0.9;
+      const size = Math.floor(ctx.sampleRate * duration);
+      const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < size; i += 1) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(160, now);
+      filter.frequency.exponentialRampToValueAtTime(60, now + duration);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(0.09, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(master);
+      src.start(now);
     } catch {
       /* atmosphere only */
     }

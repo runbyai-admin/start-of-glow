@@ -6,6 +6,8 @@ import { VIEW_HEIGHT, VIEW_WIDTH } from "./dimensions";
 interface EndingInitData {
   ambience: Ambience;
   resets: number;
+  /** Flawless levels (every mote found) completed this run. */
+  flawless?: number;
 }
 
 /**
@@ -19,6 +21,7 @@ const BEST_RESETS_KEY = "start-of-glow-best-resets";
 export class EndingScene extends Phaser.Scene {
   private ambience!: Ambience;
   private resets = 0;
+  private flawless = 0;
   private isNewBest = false;
 
   constructor() {
@@ -28,6 +31,7 @@ export class EndingScene extends Phaser.Scene {
   init(data: EndingInitData): void {
     this.ambience = data.ambience;
     this.resets = data.resets ?? 0;
+    this.flawless = data.flawless ?? 0;
     this.isNewBest = this.recordBest(this.resets);
   }
 
@@ -69,6 +73,7 @@ export class EndingScene extends Phaser.Scene {
       .setDepth(10);
     const light = this.lights.addLight(wisp.x, wisp.y, 300, 0xffe6bf, 1.4);
 
+    this.ambience.setStorm(false);
     this.ambience.ending();
 
     this.tweens.add({
@@ -86,7 +91,7 @@ export class EndingScene extends Phaser.Scene {
     });
 
     const line = this.add
-      .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.8, "the forest remembers the light", {
+      .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.78, "the forest remembers the light", {
         fontFamily: "Georgia, 'Times New Roman', serif",
         fontSize: "24px",
         color: "#2a2013",
@@ -96,12 +101,29 @@ export class EndingScene extends Phaser.Scene {
       .setDepth(20);
     this.tweens.add({ targets: line, alpha: 0.75, duration: 1400, delay: 2400, ease: "Sine.easeOut" });
 
+    // Only worth a line when it happened - a run that skipped motes gets no
+    // scolding, just the resets line it would have gotten anyway.
+    if (this.flawless > 0) {
+      const flawlessText =
+        this.flawless >= 3 ? "you found every mote there was" : `${this.flawless} of 3 clearings gave up every mote`;
+      const flawlessLine = this.add
+        .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.845, flawlessText, {
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          fontSize: "14px",
+          color: "#4a3a1e",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0)
+        .setDepth(20);
+      this.tweens.add({ targets: flawlessLine, alpha: 0.65, duration: 1400, delay: 2600, ease: "Sine.easeOut" });
+    }
+
     const baseLine =
       this.resets > 0
         ? `the dark caught you ${this.resets} time${this.resets === 1 ? "" : "s"} on the way here`
         : "not once did the dark catch you";
     const resetsLine = this.add
-      .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.87, this.isNewBest ? `${baseLine} - fewest yet` : baseLine, {
+      .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.885, this.isNewBest ? `${baseLine} - fewest yet` : baseLine, {
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         fontSize: "14px",
         color: "#3a2f1c",
@@ -109,7 +131,7 @@ export class EndingScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0)
       .setDepth(20);
-    this.tweens.add({ targets: resetsLine, alpha: 0.6, duration: 1400, delay: 2700, ease: "Sine.easeOut" });
+    this.tweens.add({ targets: resetsLine, alpha: 0.6, duration: 1400, delay: 2800, ease: "Sine.easeOut" });
 
     const prompt = this.add
       .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.94, "press to begin again", {
@@ -164,6 +186,13 @@ export class EndingScene extends Phaser.Scene {
       lightsActive: this.lights.active,
       level: 0,
       resets: this.resets,
+      required: 0,
+      beaconOpen: false,
+      flawless: this.flawless,
+      wispX: 0,
+      wispY: 0,
+      motes: [],
+      hazards: [],
     };
   }
 }

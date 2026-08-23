@@ -42,6 +42,8 @@ interface LevelInitData {
   levelIndex: number;
   ambience: Ambience;
   resets?: number;
+  /** Flawless levels (every mote found) completed earlier in this run. */
+  flawless?: number;
 }
 
 /** Cosmetic per-mood tint - purely a palette shift between stages, same shapes. */
@@ -63,6 +65,7 @@ export class LevelScene extends Phaser.Scene {
   private config!: LevelConfig;
   private ambience!: Ambience;
   private resets = 0;
+  private flawlessLevels = 0;
 
   private wisp!: Phaser.GameObjects.Image;
   private wispLight!: Phaser.GameObjects.Light;
@@ -82,12 +85,17 @@ export class LevelScene extends Phaser.Scene {
 
   private hud!: Phaser.GameObjects.Text;
   private levelCard!: Phaser.GameObjects.Text;
+  private openLine!: Phaser.GameObjects.Text;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private target = new Phaser.Math.Vector2(START_X, START_Y);
 
   private collected = 0;
+  /** Motes actually placed this level - derived from the data used, never assumed from config. */
+  private totalMotes = 0;
   private pulseBoost = 0;
   private levelClear = false;
+  /** Every mote currently collected - the flawless variant is showing. */
+  private flawlessNow = false;
   private locked = false;
   private graceUntil = 0;
 
@@ -99,9 +107,12 @@ export class LevelScene extends Phaser.Scene {
     this.config = levelFor(data.levelIndex) ?? LEVELS[0];
     this.ambience = data.ambience;
     this.resets = data.resets ?? 0;
+    this.flawlessLevels = data.flawless ?? 0;
     this.collected = 0;
+    this.totalMotes = 0;
     this.pulseBoost = 0;
     this.levelClear = false;
+    this.flawlessNow = false;
     this.locked = false;
     this.moteConfigs = [];
     this.motes = [];
@@ -137,10 +148,13 @@ export class LevelScene extends Phaser.Scene {
     this.buildMotes();
     this.buildWisp();
     this.buildHazards();
+    this.buildStorm();
     this.buildCamera();
     this.buildVignette();
     this.buildHud();
     this.bindInput();
+
+    this.ambience.setStorm(this.config.mood === "storm-dark");
 
     this.graceUntil = this.time.now + RESPAWN_GRACE_MS;
     this.cameras.main.fadeIn(420, 5, 6, 12);
@@ -219,12 +233,17 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private buildMotes(): void {
-    const rng = new Phaser.Math.RandomDataGenerator([`start-of-glow-${this.config.index}`]);
-    const near = Math.ceil(this.config.moteCount / 2);
-    for (let i = 0; i < this.config.moteCount; i += 1) {
-      const x = i < near ? rng.between(80, VIEW_WIDTH - 80) : rng.between(VIEW_WIDTH + 40, WORLD_WIDTH - 80);
-      this.moteConfigs.push({ x, y: rng.between(140, WORLD_HEIGHT - 160) });
+    if (this.config.layout) {
+      this.moteConfigs = this.config.layout.motes.map((m) => ({ ...m }));
+    } else {
+      const rng = new Phaser.Math.RandomDataGenerator([`start-of-glow-${this.config.index}`]);
+      const near = Math.ceil(this.config.moteCount / 2);
+      for (let i = 0; i < this.config.moteCount; i += 1) {
+        const x = i < near ? rng.between(80, VIEW_WIDTH - 80) : rng.between(VIEW_WIDTH + 40, WORLD_WIDTH - 80);
+        this.moteConfigs.push({ x, y: rng.between(140, WORLD_HEIGHT - 160) });
+      }
     }
+    this.totalMotes = this.moteConfigs.length;
     this.spawnMotes();
   }
 
@@ -291,7 +310,8 @@ export class LevelScene extends Phaser.Scene {
     this.hazardTrail = trailEmitter;
 
     const rng = new Phaser.Math.RandomDataGenerator([`start-of-glow-hazards-${this.config.index}`]);
-    for (let i = 0; i < this.config.hazardCount; i += 1) {
+    const count = this.config.layout ? this.config.layout.hazards.length : this.config.hazardCount;
+    for (let i = 0; i < count; i += 1) {
       const img = this.add
         .image(0, 0, `hazard-${this.config.index}`)
         .setDepth(6)
@@ -301,16 +321,71 @@ export class LevelScene extends Phaser.Scene {
       this.hazards.push(hazard);
 
       const waypoints: Phaser.Math.Vector2[] = [];
-      const legs = 3;
-      for (let w = 0; w < legs; w += 1) {
-        waypoints.push(
-          new Phaser.Math.Vector2(rng.between(340, WORLD_WIDTH - 100), rng.between(120, WORLD_HEIGHT - 140)),
-        );
+      if (this.config.layout) {
+        for (const w of this.config.layout.hazards[i]) {
+          waypoints.push(new Phaser.Math.Vector2(w.x, w.y));
+        }
+      } else {
+        const legs = 3;
+        for (let w = 0; w < legs; w += 1) {
+          waypoints.push(
+            new Phaser.Math.Vector2(rng.between(340, WORLD_WIDTH - 100), rng.between(120, WORLD_HEIGHT - 140)),
+          );
+        }
       }
       img.setPosition(waypoints[0].x, waypoints[0].y);
       light.setPosition(waypoints[0].x, waypoints[0].y);
       this.patrol(hazard, waypoints, 0);
     }
+  }
+
+  /**
+   * The storm-dark weather layer - level 3's identity beyond a palette shift.
+   * Wind-blown flecks drift left across the near field, and a seeded flicker
+   * schedule fires distant lightning behind the hills (a screen-space wash
+   * above the sky, below everything else) with a soft thunder swell. Fully
+   * deterministic per run, like every other moving part in a level.
+   */
+  private buildStorm(): void {
+    if (this.config.mood !== "storm-dark") return;
+
+    const flecks = this.add.particles(0, 0, "spark", {
+      x: { min: -120, max: VIEW_WIDTH + 260 },
+      y: { min: -60, max: VIEW_HEIGHT },
+      speedX: { min: -150, max: -80 },
+      speedY: { min: 18, max: 42 },
+      lifespan: { min: 1300, max: 2400 },
+      scale: { start: 0.3, end: 0.08 },
+      alpha: { start: 0.3, end: 0 },
+      quantity: 1,
+      frequency: 55,
+      tint: [0x8a9fd8, 0x6f83c4, 0xa9b8e8],
+      blendMode: Phaser.BlendModes.ADD,
+    });
+    flecks.setScrollFactor(0.9).setDepth(-8);
+
+    const rng = new Phaser.Math.RandomDataGenerator([`start-of-glow-storm-${this.config.index}`]);
+    const flash = this.add
+      .rectangle(VIEW_WIDTH / 2, VIEW_HEIGHT / 2, VIEW_WIDTH, VIEW_HEIGHT, 0xcdd8ff)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setDepth(-90);
+    const schedule = (): void => {
+      this.after(rng.between(6500, 12500), () => {
+        if (!flash.active) return;
+        this.ambience.rumble();
+        this.tweens.add({
+          targets: flash,
+          alpha: { from: 0, to: 0.07 },
+          duration: 90,
+          yoyo: true,
+          repeat: 1,
+          repeatDelay: 60,
+          onComplete: () => schedule(),
+        });
+      });
+    };
+    schedule();
   }
 
   /**
@@ -410,6 +485,17 @@ export class LevelScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
 
+    this.openLine = this.add
+      .text(VIEW_WIDTH / 2, 80, "the beacon is lit", {
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontSize: "17px",
+        color: "#ffd9a0",
+      })
+      .setOrigin(0.5, 0)
+      .setAlpha(0)
+      .setDepth(100)
+      .setScrollFactor(0);
+
     this.updateHud();
   }
 
@@ -490,6 +576,22 @@ export class LevelScene extends Phaser.Scene {
     if (this.levelClear) {
       this.checkBeaconArrival();
     }
+
+    // Keep the published positions live between collect/fail events, so a
+    // scripted play run can steer by them - telemetry a human player already
+    // has by looking at the screen, not a capability the game itself lacks.
+    const published = window.__glow;
+    if (published && published.scene === "level") {
+      published.wispX = Math.round(this.wisp.x);
+      published.wispY = Math.round(this.wisp.y);
+      for (let i = 0; i < this.hazards.length; i += 1) {
+        const h = published.hazards[i];
+        if (h) {
+          h.x = Math.round(this.hazards[i].img.x);
+          h.y = Math.round(this.hazards[i].img.y);
+        }
+      }
+    }
   }
 
   private checkHazardCollisions(): void {
@@ -515,28 +617,67 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  /** How many motes open the beacon this level (defensively never above what was actually placed). */
+  private requiredMotes(): number {
+    return Math.min(this.config.requiredMotes, this.totalMotes);
+  }
+
   private grow(): void {
     this.wispLight.radius = 347 + this.collected * 20;
     this.wisp.setScale(0.5 + this.collected * 0.018);
 
-    const progress = Phaser.Math.Clamp(this.collected / this.config.moteCount, 0, 1);
+    const required = this.requiredMotes();
+    const progress = Phaser.Math.Clamp(this.collected / required, 0, 1);
     this.beacon.setAlpha(0.05 + progress * 0.8);
     this.beaconLight.intensity = progress * 1.4;
 
-    if (this.collected >= this.config.moteCount && !this.levelClear) {
+    // The beacon opens at the required count - everything past it is the
+    // player's own choice: bank the level now, or brave the guarded pockets
+    // for the remaining motes and the flawless variant.
+    if (this.collected >= required && !this.levelClear) {
       this.levelClear = true;
-      this.tweens.add({
-        targets: [this.beacon],
-        scale: { from: 1, to: 1.12 },
-        duration: 900,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
+      this.ambience.beaconOpen();
+      this.showOpenLine();
+      this.beaconPulse(1.12);
+    }
+
+    if (this.collected >= this.totalMotes && !this.flawlessNow) {
+      this.flawlessNow = true;
+      this.beacon.setAlpha(1);
+      this.beaconLight.intensity = 2.2;
+      this.beaconLight.setColor(0xffe9c0);
+      this.beaconPulse(1.2);
     }
 
     this.updateHud();
     this.reportState();
+  }
+
+  private beaconPulse(to: number): void {
+    this.tweens.killTweensOf(this.beacon);
+    this.beacon.setScale(1);
+    this.tweens.add({
+      targets: [this.beacon],
+      scale: { from: 1, to },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  /** One quiet serif line under the level card, the moment the beacon opens. */
+  private showOpenLine(): void {
+    this.tweens.killTweensOf(this.openLine);
+    this.openLine.setAlpha(0);
+    this.tweens.add({
+      targets: this.openLine,
+      alpha: { from: 0, to: 0.85 },
+      duration: 700,
+      yoyo: true,
+      hold: 1900,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private checkBeaconArrival(): void {
@@ -581,12 +722,22 @@ export class LevelScene extends Phaser.Scene {
       this.wisp.setPosition(START_X, START_Y);
       this.wispLight.setPosition(START_X, START_Y);
       this.wisp.setScale(0.5);
+      // Restore the light itself too - the snuff tween shrank its radius, and
+      // nothing else resets it until the next collect. A respawned light
+      // should match a fresh spawn at zero motes, not stay snuffed-small.
+      this.tweens.killTweensOf(this.wispLight);
+      this.wispLight.radius = 347;
+      this.wispLight.intensity = this.baseIntensity();
       this.collected = 0;
       this.levelClear = false;
+      this.flawlessNow = false;
       this.beacon.setAlpha(0.05);
       this.beaconLight.intensity = 0;
+      this.beaconLight.setColor(0xffcf8a);
       this.tweens.killTweensOf(this.beacon);
       this.beacon.setScale(1);
+      this.tweens.killTweensOf(this.openLine);
+      this.openLine.setAlpha(0);
       this.spawnMotes();
       this.updateHud();
       this.reportState();
@@ -597,23 +748,28 @@ export class LevelScene extends Phaser.Scene {
 
   private completeLevel(): void {
     this.locked = true;
-    this.ambience.levelComplete();
+    const wasFlawless = this.collected >= this.totalMotes;
+    const flawless = this.flawlessLevels + (wasFlawless ? 1 : 0);
+    this.ambience.levelComplete(wasFlawless);
     this.cameras.main.flash(280, 255, 232, 190);
     this.cameras.main.fadeOut(520, 8, 7, 14);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const next = this.config.index + 1;
       if (levelFor(next)) {
-        this.scene.start("level", { levelIndex: next, ambience: this.ambience, resets: this.resets });
+        this.scene.start("level", { levelIndex: next, ambience: this.ambience, resets: this.resets, flawless });
       } else {
-        this.scene.start("ending", { ambience: this.ambience, resets: this.resets });
+        this.scene.start("ending", { ambience: this.ambience, resets: this.resets, flawless });
       }
     });
   }
 
   private updateHud(): void {
-    this.hud.setText(
-      `LEVEL ${this.config.index}/${LEVELS.length}   motes ${this.collected}/${this.config.moteCount}   resets ${this.resets}`,
-    );
+    const moteSegment = this.flawlessNow
+      ? `motes ${this.collected}/${this.totalMotes} · flawless`
+      : this.levelClear
+        ? `motes ${this.collected}/${this.totalMotes} · beacon open`
+        : `motes ${this.collected}/${this.totalMotes} · beacon at ${this.requiredMotes()}`;
+    this.hud.setText(`LEVEL ${this.config.index}/${LEVELS.length}   ${moteSegment}   resets ${this.resets}`);
   }
 
   private announceReady(): void {
@@ -631,6 +787,13 @@ export class LevelScene extends Phaser.Scene {
       lightsActive: this.lights.active,
       level: this.config.index,
       resets: this.resets,
+      required: this.requiredMotes(),
+      beaconOpen: this.levelClear,
+      flawless: this.flawlessLevels,
+      wispX: Math.round(this.wisp.x),
+      wispY: Math.round(this.wisp.y),
+      motes: this.motes.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y) })),
+      hazards: this.hazards.map((h) => ({ x: Math.round(h.img.x), y: Math.round(h.img.y) })),
     };
   }
 }
