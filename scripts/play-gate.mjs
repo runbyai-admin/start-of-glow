@@ -213,6 +213,11 @@ async function startLevelOne(page) {
 // Level 1's hand-authored geography (kept in step with levels.ts by eye -
 // the gate fails loudly if the level stops matching it).
 const ARC = [ [330, 430], [430, 355], [545, 305], [665, 290], [780, 510] ];
+// Staging point hard against the lane's safe side: the guarded dash across is
+// then ~180px, not the 342px diagonal from ARC's end - at 5fps under host
+// load the long dash lost its race with the sentry's return about half the
+// time (2026-08-24, load ~8: six straight snuffs mid-crossing).
+const STAGE_HIGH = [820, 300];
 const CROSS_HIGH = [990, 240];
 const MID = [ [1160, 380], [1320, 300], [1520, 430] ];
 const LOW_ROAD = [2280, 585];
@@ -228,9 +233,9 @@ async function runCautious(browser) {
   const s0 = await state(page);
   if (s0.required !== 10) fail(`level 1 required=${s0.required}, expected 10`);
 
-  const route = [...ARC, CROSS_HIGH, ...MID, LOW_ROAD];
+  const route = [...ARC, STAGE_HIGH, CROSS_HIGH, ...MID, LOW_ROAD];
   const guards = {
-    [ARC.length]: { hazard: 0, minDist: 190 }, // crossing the sentry lane
+    [ARC.length + 1]: { hazard: 0, minDist: 320 }, // crossing the sentry lane
     [route.length - 1]: { hazard: 1, minDist: 210 }, // passing under the circuit
   };
   await runRoute(page, box, route, { label: "cautious L1", guards });
@@ -272,12 +277,12 @@ async function runFlawless(browser) {
   const page = await (await browser.newContext({ viewport: { width: VIEW.w, height: VIEW.h } })).newPage();
   const box = await startLevelOne(page);
 
-  const route = [...ARC, CROSS_HIGH, CROSS_LOW, POCKET_A, ...MID, ...POCKET_B, LOW_ROAD];
+  const route = [...ARC, STAGE_HIGH, CROSS_HIGH, CROSS_LOW, POCKET_A, ...MID, ...POCKET_B, LOW_ROAD];
   const guards = {
-    [ARC.length]: { hazard: 0, minDist: 190 },
-    [ARC.length + 2]: { hazard: 0, minDist: 200 }, // pocket A sits at the sentry's turnaround
-    [ARC.length + 3 + MID.length]: { hazard: 1, minDist: 200 }, // first pocket-B mote
-    [ARC.length + 4 + MID.length]: { hazard: 1, minDist: 200 }, // second pocket-B mote
+    [ARC.length + 1]: { hazard: 0, minDist: 320 },
+    [ARC.length + 3]: { hazard: 0, minDist: 200 }, // pocket A sits at the sentry's turnaround
+    [ARC.length + 4 + MID.length]: { hazard: 1, minDist: 200 }, // first pocket-B mote
+    [ARC.length + 5 + MID.length]: { hazard: 1, minDist: 200 }, // second pocket-B mote
     [route.length - 1]: { hazard: 1, minDist: 210 },
   };
   await runRoute(page, box, route, { label: "flawless L1", guards });

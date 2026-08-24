@@ -55,3 +55,41 @@ That fix immediately broke the existing smoke test (`tests/smoke.spec.ts`'s mote
 **A 1-year plan**, `docs/game-1-year-plan.md`: what this game becomes if this direction keeps winning rounds, honest about the format's actual mechanic (only a winner's code survives into tomorrow's base, so continuity is the prize for winning, not a given), staged milestones with a concrete check for each, and the risks named plainly rather than assumed away.
 
 **Verification:** `npm run check` and `npm test` both green (the collection test needs a generous per-test timeout under today's host load - three contestants' concurrent sessions pushed this shared 4-core host to a sustained 8-12 load average during this work; confirmed by killing my own earlier long-running diagnostic script and watching load stay elevated from other tenants' activity, not just mine). Typecheck clean. Hand-verified via Playwright-driven play (not just automated assertions): the movement cap traversal timing, the rendering and HUD state after a real playthrough segment, and a direct read of the alert/collision code path, since `checkHazardCollisions()` itself was left untouched by this change.
+
+## Round 1 - Claude (continued: judging-day playtest - the ending's stats were near-invisible, 2026-08-24)
+
+A fresh-eyes pass of the deployed build on judging day, looking for anything that hurts the
+judged minute rather than for new features.
+
+**The find: the ending's own payoff text had ~1.5:1 contrast.** The three closing lines (the
+"the forest remembers the light" farewell, the flawless-clearings line, the resets line) and
+the restart prompt were dark browns (`#2a2013`/`#4a3a1e`/`#3a2f1c`) on a near-black sky
+(`#05060c`) - designed as silhouettes against the wisp's expanding additive bloom, which works
+only where the bloom actually paints brightly behind them. Any renderer or display that draws
+the bloom dimmer (software rasterizers provably; display color handling varies) leaves the
+run's own closing stats the least readable text in the game. It had "verified" on a real
+display the night before because the bloom rescued it there - the base contrast was always
+broken. Fixed with warm parchment lettering in the same family the HUD and level card already
+use (`#e7dcc2` -> `#d9c9a3` -> `#cfc0a0` -> `#a9987a`, descending brightness for hierarchy),
+existing fade/pulse alphas unchanged; the mechanism is documented in the scene.
+
+**Driver, not game:** the play-gate under tonight's shared-host load (three contestant
+sessions, load 5-8 on 4 cores) kept losing its sentry-lane crossing at ~5fps headless. Measured
+the level instead of assuming: the sentry's 880px patrol at 70px/s gives a ~12.6s cycle and a
+~4s safe window; a player at the 480px/s cap crosses in ~0.4s. The gate's own dash was the
+342px diagonal from the arc's end - 3-4s at 5fps, marginal by construction. The script (never
+the game) gained a staging waypoint hard against the lane and a wider clearance wait.
+
+**Verification (proportional to a color-only change):** typecheck + both Playwright smoke
+tests green. Play-gate runs against BOTH the live judged URL and a local preview confirmed the
+part a gate can still prove under this load: level 1's hand-authored arc and the
+optional-collection choice work (beacon opens at exactly 10/14 for a required-only route, both
+runs), HUD and atmosphere render correctly; the full-run legs then died to driver attrition
+(deaths scattered over five different waypoints), so the ending evidence comes from
+`scripts/ending-render-probe.mjs` instead - a scene-jump harness that renders the ending with
+every line present (including the flawless line a required-only run never shows) on the same
+build. The probe screenshot on the SOFTWARE rasterizer - the worst case the dark-brown text
+failed on - shows all four lines cleanly legible with the intended hierarchy. Contrast measured,
+not vibed: 1.27-1.85:1 before, 7.2-14.9:1 after (WCAG formula, against the sky base). The
+probe needs a temporary `window.__game` line in `main.ts` that is never committed or deployed
+(the deployed bundle is grep-verified free of it).

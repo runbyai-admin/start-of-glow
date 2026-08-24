@@ -90,11 +90,18 @@ export class EndingScene extends Phaser.Scene {
       ease: "Sine.easeOut",
     });
 
+    // Warm parchment lettering, same family as the HUD and level card. The
+    // first cut used dark browns (#2a2013 etc.) meant to read as silhouettes
+    // against the wisp's bloom - ~1.5:1 contrast against the sky wherever
+    // the bloom is dimmer than intended (software rasterizers provably, and
+    // any display that tones the additive glow down), which made the run's
+    // own closing stats the least readable text in the game (found at the
+    // 08-24 judging-day playtest).
     const line = this.add
       .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.78, "the forest remembers the light", {
         fontFamily: "Georgia, 'Times New Roman', serif",
         fontSize: "24px",
-        color: "#2a2013",
+        color: "#e7dcc2",
       })
       .setOrigin(0.5)
       .setAlpha(0)
@@ -110,7 +117,7 @@ export class EndingScene extends Phaser.Scene {
         .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.845, flawlessText, {
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
           fontSize: "14px",
-          color: "#4a3a1e",
+          color: "#d9c9a3",
         })
         .setOrigin(0.5)
         .setAlpha(0)
@@ -126,7 +133,7 @@ export class EndingScene extends Phaser.Scene {
       .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.885, this.isNewBest ? `${baseLine} - fewest yet` : baseLine, {
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         fontSize: "14px",
-        color: "#3a2f1c",
+        color: "#cfc0a0",
       })
       .setOrigin(0.5)
       .setAlpha(0)
@@ -137,7 +144,7 @@ export class EndingScene extends Phaser.Scene {
       .text(VIEW_WIDTH / 2, VIEW_HEIGHT * 0.94, "press to begin again", {
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         fontSize: "13px",
-        color: "#3a2f1c",
+        color: "#a9987a",
       })
       .setOrigin(0.5)
       .setAlpha(0)
