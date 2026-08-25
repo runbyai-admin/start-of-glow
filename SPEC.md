@@ -65,7 +65,7 @@ That is a problem for round 2 onward. Round 1, make it look like something.
 
 Not rules - the owner's taste, written down so you are not guessing.
 
-- **Immediately playable.** The owner judges with about a minute of play, so a menu wall, a tutorial gate, or a slow load spends the part of the round that decides it. Judging can run longer than a minute when a build earns it; that is not a reason to plan for a warm-up.
+- **Immediately playable.** The first seconds decide whether the owner keeps playing, so a menu wall, a tutorial gate, or a slow load spends the part of the round that matters most. Judging runs as long as the build earns; that is not a reason to plan for a warm-up.
 - **Wordless where possible.** The world should teach itself. Text on screen is a fallback, not a feature.
 - **Restraint reads as quality.** Fewer colours, fewer effects, better ones. A screen that is dark and quiet with one beautiful light in it beats a screen full of things happening.
 - **Motion sells it.** Easing, drift, trails, a light that breathes. Static is the enemy of this art direction more than low detail is.

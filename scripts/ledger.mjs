@@ -15,8 +15,10 @@
  * The git side of a round - commit, tags, push - belongs to scripts/bank-round.sh
  * and scripts/skip-round.sh; this script only ever touches ledger.json and LEDGER.md.
  *
- * A win is one glow point. A provider's Nth tip costs N points, so points spent
- * on tips is 1+2+...+N and the balance is wins minus that.
+ * A win is one glow point. The first tip costs 3 points and each further tip
+ * costs one more, so a provider's Nth tip costs N+2 and the balance is wins
+ * minus everything spent. Three wins before any advice is bought is deliberate:
+ * a tip should cost a run of good rounds, not a single lucky one.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -26,6 +28,8 @@ const DATA = resolve(ROOT, "ledger.json");
 const DOC = resolve(ROOT, "LEDGER.md");
 
 const PROVIDERS = ["claude", "openai", "grok"];
+/** What a provider's Nth tip costs, in glow points: 3, 4, 5, ... */
+const tipCost = (n) => n + 2;
 const LABEL = { claude: "Claude", openai: "OpenAI", grok: "Grok" };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -93,7 +97,7 @@ function derive(data) {
     if (!DATE_RE.test(t.date ?? "")) problems.push(`${at}.date must be YYYY-MM-DD`);
     const s = stand[t.provider];
     const n = s.tips + 1;
-    const cost = n;
+    const cost = tipCost(n);
     if (t.n !== undefined && t.n !== n) problems.push(`${at}.n should be ${n}, not ${t.n}`);
     if (t.cost !== undefined && t.cost !== cost) problems.push(`${at}.cost should be ${cost}, not ${t.cost}`);
     s.tips = n;
@@ -106,6 +110,7 @@ function derive(data) {
   for (const p of PROVIDERS) {
     stand[p].balance = stand[p].wins - stand[p].spent;
     stand[p].nextTip = stand[p].tips + 1;
+    stand[p].nextTipCost = tipCost(stand[p].nextTip);
   }
 
   if (problems.length) {
@@ -128,7 +133,7 @@ function render(data) {
   out.push("# Ledger");
   out.push("");
   out.push(
-    "Wins and tips for the game-off. A win is one glow point; a provider's Nth tip costs N points ([RULES.md](RULES.md#wins-are-currency)).",
+    "Wins and tips for the game-off. A win is one glow point; the first tip costs 3 points and each further one costs one more, so a provider's Nth tip costs N+2 ([RULES.md](RULES.md#wins-are-currency)).",
   );
   out.push("");
   out.push(
@@ -141,7 +146,7 @@ function render(data) {
   out.push("|----------|-----:|------------:|-------------:|--------:|---------------:|");
   for (const p of ranked(stand)) {
     const s = stand[p];
-    out.push(`| ${LABEL[p]} | ${s.wins} | ${s.tips} | ${s.spent} | ${s.balance} | ${s.nextTip} |`);
+    out.push(`| ${LABEL[p]} | ${s.wins} | ${s.tips} | ${s.spent} | ${s.balance} | ${s.nextTipCost} |`);
   }
   out.push("");
   out.push("## Rounds");
@@ -183,7 +188,7 @@ function status(data) {
   for (const p of ranked(stand)) {
     const s = stand[p];
     console.log(
-      `${LABEL[p].padEnd(7)} wins ${s.wins}  tips ${s.tips}  balance ${s.balance}  next tip ${s.nextTip}`,
+      `${LABEL[p].padEnd(7)} wins ${s.wins}  tips ${s.tips}  balance ${s.balance}  next tip #${s.nextTip} costs ${s.nextTipCost}`,
     );
   }
 }
@@ -224,7 +229,7 @@ function recordRound(data, argv) {
   save(data);
   if (winner) {
     console.log(
-      `recorded round ${round}: ${LABEL[winner]} wins (balance ${stand[winner].balance}, next tip ${stand[winner].nextTip})`,
+      `recorded round ${round}: ${LABEL[winner]} wins (balance ${stand[winner].balance}, next tip costs ${stand[winner].nextTipCost})`,
     );
   } else {
     console.log(`recorded round ${round}: no winner`);
@@ -235,22 +240,22 @@ function buyTip(data, argv) {
   const f = flags(argv);
   if (!PROVIDERS.includes(f.provider)) die(`--provider must be ${PROVIDERS.join("|")}`);
   const before = derive(data).stand[f.provider];
-  if (before.balance < before.nextTip) {
+  if (before.balance < before.nextTipCost) {
     die(
-      `${LABEL[f.provider]} has ${before.balance} point(s) and tip #${before.nextTip} costs ${before.nextTip}`,
+      `${LABEL[f.provider]} has ${before.balance} point(s) and tip #${before.nextTip} costs ${before.nextTipCost}`,
     );
   }
   data.tips.push({
     date: f.date ?? today(),
     provider: f.provider,
     n: before.nextTip,
-    cost: before.nextTip,
+    cost: before.nextTipCost,
     ...(f.note ? { note: f.note } : {}),
   });
   const stand = render(data);
   save(data);
   console.log(
-    `${LABEL[f.provider]} bought tip #${before.nextTip} for ${before.nextTip} point(s); balance ${stand[f.provider].balance}, next tip ${stand[f.provider].nextTip}`,
+    `${LABEL[f.provider]} bought tip #${before.nextTip} for ${before.nextTipCost} point(s); balance ${stand[f.provider].balance}, next tip costs ${stand[f.provider].nextTipCost}`,
   );
 }
 

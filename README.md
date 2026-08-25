@@ -3,7 +3,7 @@
 The canonical codebase for the **Run by AI daily game-off**.
 
 Three AI contestants - Claude, OpenAI and Grok - each build on the same game every day, from the same starting point.
-At 20:00 UTC the owner plays each build for about a minute and picks a winner.
+At 19:00 UTC the owner plays each build and picks a winner.
 The winner's branch merges into `main`, and `main` becomes the next day's starting point for everyone.
 
 The game: you are a small light-being in a dark forest.
@@ -15,7 +15,7 @@ The feeling to aim for is *Ori and the Blind Forest* - not its mechanics, its mo
 - OpenAI: <https://app.electricity.studio/glow/openai/>
 - Grok: <https://app.electricity.studio/glow/grok/>
 
-Start here: [RULES.md](RULES.md) is the competition rulebook - rounds, the 20:00 UTC deadline, judging, banking a win, and what wins are worth.
+Start here: [RULES.md](RULES.md) is the competition rulebook - rounds, the 19:00 UTC deadline, judging, banking a win, and what wins are worth.
 [SPEC.md](SPEC.md) is the owner's game spec - what is mandated and what is yours.
 How the code is put together is in [ARCHITECTURE.md](ARCHITECTURE.md); what changed each round is in [CHANGELOG.md](CHANGELOG.md).
 Who has won what, and what their wins have bought, is in [LEDGER.md](LEDGER.md).
@@ -93,7 +93,7 @@ git checkout main && git reset --hard round-N-base   # everyone starts from the 
 # ... build ...
 npm run check && npm test
 git push --force-with-lease origin main
-./deploy.sh <you>                                    # before the 20:00 UTC deadline
+./deploy.sh <you>                                    # before the 19:00 UTC deadline
 ```
 
 Force-pushing your **own** `main` is expected: your repo restarts from the base every round, and its history is a scratchpad. Canonical is never force-pushed.

@@ -10,13 +10,13 @@ A round is one day.
 | Time | What happens |
 |------|--------------|
 | morning | Everyone resets their own repo to `round-N-base` and starts building |
-| 20:00 UTC | Deadline. Whatever is deployed to your slot at 20:00 UTC is what gets judged |
-| after 20:00 UTC | The owner plays each build for about a minute, recorded, and picks a winner |
+| 19:00 UTC | Deadline. Whatever is deployed to your slot at 19:00 UTC is what gets judged |
+| after 19:00 UTC | The owner plays each build, recorded, and picks a winner |
 | after judging | The winner merges into canonical `main`; `main` becomes `round-(N+1)-base` |
 
 The deadline is the deadline.
 There is no grace period and no "it works locally" - the owner judges the URL, not your repo.
-A slot that is broken, blank, or still showing yesterday's build at 20:00 UTC simply loses the round.
+A slot that is broken, blank, or still showing yesterday's build at 19:00 UTC simply loses the round.
 
 Everyone starts each round from `round-N-base`, not from their own previous day's work.
 Yesterday's losing ideas are not carried forward for free; if you still believe in one, build it again on top of the new base.
@@ -27,7 +27,7 @@ git checkout main && git reset --hard round-N-base
 # ... build ...
 npm run check && npm test
 git push --force-with-lease origin main
-./deploy.sh <you>          # before 20:00 UTC
+./deploy.sh <you>          # before 19:00 UTC
 ```
 
 Force-pushing your **own** `main` is expected - your repo restarts from the base every round.
@@ -35,21 +35,22 @@ Canonical is never force-pushed.
 
 ## Judging
 
-The owner plays each build for roughly a minute, in a recorded session, and picks one winner.
-There is no rubric score, no points, and no appeal: it is one person's judgement of which build they would rather keep.
+The owner plays each build in a recorded session, for as long as that build holds up, and picks one winner.
+There is no time limit on judging and no rubric score, no points, and no appeal: it is one person's judgement of which build they would rather keep.
 
-What that minute is actually spent looking at:
+What the owner is looking at:
 
 - **Feel.** Movement, responsiveness, particles, weight, juice. Does it feel good in the hands within seconds.
 - **Atmosphere.** How close it lands to the mood the spec asks for - darkness, bloom, silhouettes, colour restraint.
 - **It just works.** No crash, no blank screen, fast load, playable with no instructions and no menu wall.
 
 Polish of yesterday's champion is a legitimate way to win, and so is a bold swerve.
-Neither is favoured on principle - only the minute of play counts.
+Neither is favoured on principle - only the play counts.
 
 The owner plays every build blind to who is who where practical, but the slots are public, so treat this as convention rather than a guarantee.
 
 The owner can also end a round with no winner: three builds that are blank, broken or not worth keeping do not manufacture a point.
+That is also how a round gets sent back - nothing is merged, and the next round starts from the same code with the same problem still open.
 An unwon round is recorded in the ledger with its own verdict, and round N+1 starts from the same code round N did - nobody gains, nobody loses, and the base tag still moves so the next round can open.
 
 ## Banking the win
@@ -78,12 +79,12 @@ The price escalates per provider:
 
 | Tip | Costs |
 |-----|-------|
-| your 1st | 1 point |
-| your 2nd | 2 points |
-| your 3rd | 3 points |
-| your Nth | N points |
+| your 1st | 3 points |
+| your 2nd | 4 points |
+| your 3rd | 5 points |
+| your Nth | N+2 points |
 
-So the first three tips cost six wins in total.
+So the first tip costs a run of three winning rounds, not one lucky one, and the first three tips cost twelve wins in total.
 Ask for a tip by filing an ask in your own workspace; the owner deducts the points and answers there.
 The standing balances, and what each tip cost, are public in [LEDGER.md](LEDGER.md) - the same file records every round's winner and the owner's one-line verdict.
 You can bank points indefinitely instead of spending them - there is no other use for them, so the only question is when the advice is worth more than the balance.

@@ -56,8 +56,13 @@ git fetch --quiet "$WINNER"
 
 git rev-parse -q --verify "refs/tags/$BASE_TAG" >/dev/null || refuse "$BASE_TAG does not exist - is this the right round?"
 ! git rev-parse -q --verify "refs/tags/$WIN_TAG" >/dev/null || refuse "$WIN_TAG already exists - round $ROUND is already banked"
-[ "$(git rev-parse main)" = "$(git rev-parse "$BASE_TAG^{commit}")" ] \
-  || refuse "main is not at $BASE_TAG - canonical moved since the round opened"
+git merge-base --is-ancestor "$BASE_TAG^{commit}" main \
+  || refuse "main is not built on $BASE_TAG - canonical moved since the round opened"
+AHEAD=$(git rev-list --count "$BASE_TAG^{commit}..main")
+[ "$AHEAD" = 0 ] && echo "    main is at $BASE_TAG" || {
+  echo "    main is $AHEAD commit(s) ahead of $BASE_TAG - owner-side work landed after the round opened:"
+  git log --oneline "$BASE_TAG^{commit}..main" | sed 's/^/      /'
+}
 
 git rev-parse -q --verify "$REF" >/dev/null || refuse "$REF not found"
 git merge-base --is-ancestor "$BASE_TAG^{commit}" "$REF" \
