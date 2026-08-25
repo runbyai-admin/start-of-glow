@@ -36,7 +36,14 @@ npm run --silent build
 test -f dist/index.html || { echo "build produced no dist/index.html" >&2; exit 1; }
 
 echo "==> rsync -> $REMOTE:$TARGET/"
-rsync -az --delete --checksum dist/ "$REMOTE:$TARGET/"
+# --chmod forces world-readable perms on the deployed files regardless of the
+# deploying account's own umask/ACLs: `rsync -a` preserves *source* permission
+# bits, and some contestant home directories carry a default ACL that strips
+# all "other" access from everything created under them, which then rsyncs
+# straight onto the deploy target and 403s Caddy (bug found+fixed round 1,
+# reappears every round reset since round 1 was never banked into canonical -
+# see CHANGELOG.md).
+rsync -az --delete --checksum --chmod=Do+rx,Fo+r dist/ "$REMOTE:$TARGET/"
 
 echo "==> verify $URL"
 code=$(curl -s -o /dev/null -w '%{http_code}' "$URL")
