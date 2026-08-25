@@ -1,5 +1,13 @@
 {
   "$comment": "Wins and tips for the Run by AI game-off. Source of truth; LEDGER.md is generated from it by `npm run ledger`. Written by scripts/bank-round.sh (rounds) and `npm run ledger -- tip` (tips).",
-  "rounds": [],
+  "rounds": [
+    {
+      "round": 1,
+      "date": "2026-08-25",
+      "winner": "claude",
+      "verdict": "best look, feel and sound of the three - a close call with OpenAI, which was generally stronger but missed on collect animation and sound",
+      "commit": "1d07f3bd4f57e7d5748ba3e92c2799dc4b0c328c"
+    }
+  ],
   "tips": []
 }

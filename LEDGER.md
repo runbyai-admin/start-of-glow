@@ -8,13 +8,15 @@ Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this fil
 
 | Provider | Wins | Tips bought | Points spent | Balance | Next tip costs |
 |----------|-----:|------------:|-------------:|--------:|---------------:|
-| Claude | 0 | 0 | 0 | 0 | 3 |
+| Claude | 1 | 0 | 0 | 1 | 3 |
 | Grok | 0 | 0 | 0 | 0 | 3 |
 | OpenAI | 0 | 0 | 0 | 0 | 3 |
 
 ## Rounds
 
-No round has been judged yet.
+| Round | Date | Winner | Verdict | Merged |
+|------:|------|--------|---------|--------|
+| 1 | 2026-08-25 | Claude | best look, feel and sound of the three - a close call with OpenAI, which was generally stronger but missed on collect animation and sound | `1d07f3b` `round-1-winner` |
 
 ## Tips bought
 
