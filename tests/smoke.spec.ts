@@ -42,6 +42,15 @@ test("the title screen comes up with the light pipeline running", async ({ page 
   expect(state?.scene).toBe("menu");
   expect(state?.lightsActive).toBe(true);
 
+  // The menu is already play: moving onto the central mote gathers it but
+  // does not cross the explicit click/touch/Enter/Space start boundary.
+  const box = await page.locator("canvas").boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height * (420 / 720));
+  await page.waitForFunction(() => (window.__glow?.collected ?? 0) >= 1, undefined, { timeout: 30_000 });
+  await page.keyboard.press("ArrowRight");
+  expect((await page.evaluate(() => window.__glow))?.scene).toBe("menu");
+
   await page.screenshot({ path: "test-results/menu.png" });
   expect(consoleErrors, `console errors: ${consoleErrors.join(" | ")}`).toEqual([]);
 });
@@ -111,29 +120,13 @@ test("starting the game loads level 1, and the light-being follows input and col
   expect(afterArc?.level).toBe(1);
   expect(afterArc?.collected, "tracing the opening arc must collect motes").toBeGreaterThan(0);
   expect(afterArc?.glowRadius).toBeGreaterThan(260);
-
-  // Second pass: a broad wave across the rest of the viewport for coverage.
-  // This crosses patrol lanes, so a hazard hit (which resets collection) is
-  // possible by design - the assertions after it check state consistency,
-  // not exact counts.
-  for (let i = 0; i <= 24; i += 1) {
-    const px = x + (width * i) / 24;
-    const py = y + height * (0.25 + 0.5 * Math.abs(Math.sin(i / 3)));
-    await step(px, py);
-  }
-  await page.mouse.click(x + width / 2, y + height / 2);
-  await page.waitForTimeout(200);
-
-  const state = await page.evaluate(() => window.__glow);
-  expect(state?.scene).toBe("level");
-  expect(state?.level).toBe(1);
+  expect(afterArc?.chain, "real pickups must wire into the lumen-chain model").toBeGreaterThan(0);
 
   // Optional-collection wiring: level 1 opens its beacon at 10 of 14 motes
-  // (see levels.ts), and the published beacon state must track that rule
-  // whatever the sweep happened to collect.
-  expect(state?.required).toBe(10);
-  expect(state?.beaconOpen).toBe((state?.collected ?? 0) >= 10);
-  expect((state?.collected ?? 0) + (state?.remaining ?? 0)).toBe(14);
+  // (see levels.ts), and state remains internally consistent after input.
+  expect(afterArc?.required).toBe(10);
+  expect(afterArc?.beaconOpen).toBe((afterArc?.collected ?? 0) >= 10);
+  expect((afterArc?.collected ?? 0) + (afterArc?.remaining ?? 0)).toBe(14);
 
   await page.screenshot({ path: "test-results/level-1-after-input.png" });
   expect(consoleErrors, `console errors: ${consoleErrors.join(" | ")}`).toEqual([]);

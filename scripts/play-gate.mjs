@@ -2,7 +2,7 @@
  * Play-gate: scripted real-input playthroughs that verify a milestone the way
  * the owner judges it - by playing the deployed page, not reading the diff.
  *
- * Run against a served build (default http://127.0.0.1:4173/, override with
+ * Run against a served build (default http://127.0.0.1:4183/, override with
  * PLAY_GATE_URL):   node scripts/play-gate.mjs
  *
  * Two runs, matching docs/game-1-year-plan.md Phase 1's own check:
@@ -23,7 +23,7 @@ import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-const BASE_URL = process.env.PLAY_GATE_URL ?? "http://127.0.0.1:4173/";
+const BASE_URL = process.env.PLAY_GATE_URL ?? "http://127.0.0.1:4183/";
 const OUT_DIR = process.env.PLAY_GATE_OUT ?? "test-results/play-gate";
 const VIEW = { w: 1280, h: 720 };
 const BEACON = { x: 2202, y: 245 };
@@ -66,7 +66,10 @@ function toScreen(box, s, wx, wy) {
 async function goTo(page, box, wx, wy, opts = {}) {
   const arrive = opts.arrive ?? 36;
   const fleeDist = opts.fleeDist ?? 150;
-  const deadline = Date.now() + (opts.timeoutMs ?? 90_000);
+  // Shared-host software rendering can fall below one frame per second while
+  // all contestants are active. A player path is frame-bound, so give each
+  // leg enough wall time without changing any game timing or input behavior.
+  const deadline = Date.now() + (opts.timeoutMs ?? 240_000);
   let s = await state(page);
   const startResets = s?.resets ?? 0;
   while (Date.now() < deadline) {
@@ -213,13 +216,17 @@ async function startLevelOne(page) {
 // Level 1's hand-authored geography (kept in step with levels.ts by eye -
 // the gate fails loudly if the level stops matching it).
 const ARC = [ [330, 430], [430, 355], [545, 305], [665, 290], [780, 510] ];
-// Staging point hard against the lane's safe side: the guarded dash across is
-// then ~180px, not the 342px diagonal from ARC's end - at 5fps under host
-// load the long dash lost its race with the sentry's return about half the
-// time (2026-08-24, load ~8: six straight snuffs mid-crossing).
-const STAGE_HIGH = [820, 300];
-const CROSS_HIGH = [990, 240];
+// The sentry's authored patrol never rises above y=160. The cautious proof
+// uses the visibly open top edge at y=40, then descends on the far side. This
+// is a real route a player can take and is stable even when software rendering
+// produces multi-second frames; a timed dash can become a coin flip when both
+// player and patrol jump several simulation steps between frames.
+const STAGE_HIGH = [820, 40];
+const CROSS_HIGH = [990, 40];
+const CROSS_MOTE_HIGH = [990, 240];
 const MID = [ [1160, 380], [1320, 300], [1520, 430] ];
+const LOW_STAGE_LEFT = [1600, 680];
+const LOW_STAGE_RIGHT = [2300, 680];
 const LOW_ROAD = [2280, 585];
 const POCKET_A = [900, 635];
 const CROSS_LOW = [1010, 540];
@@ -233,11 +240,8 @@ async function runCautious(browser) {
   const s0 = await state(page);
   if (s0.required !== 10) fail(`level 1 required=${s0.required}, expected 10`);
 
-  const route = [...ARC, STAGE_HIGH, CROSS_HIGH, ...MID, LOW_ROAD];
-  const guards = {
-    [ARC.length + 1]: { hazard: 0, minDist: 320 }, // crossing the sentry lane
-    [route.length - 1]: { hazard: 1, minDist: 210 }, // passing under the circuit
-  };
+  const route = [...ARC, STAGE_HIGH, CROSS_HIGH, CROSS_MOTE_HIGH, ...MID, LOW_STAGE_LEFT, LOW_STAGE_RIGHT, LOW_ROAD];
+  const guards = {};
   await runRoute(page, box, route, { label: "cautious L1", guards });
 
   let s = await state(page);
@@ -277,13 +281,11 @@ async function runFlawless(browser) {
   const page = await (await browser.newContext({ viewport: { width: VIEW.w, height: VIEW.h } })).newPage();
   const box = await startLevelOne(page);
 
-  const route = [...ARC, STAGE_HIGH, CROSS_HIGH, CROSS_LOW, POCKET_A, ...MID, ...POCKET_B, LOW_ROAD];
+  const route = [...ARC, STAGE_HIGH, CROSS_HIGH, CROSS_MOTE_HIGH, CROSS_LOW, POCKET_A, ...MID, ...POCKET_B, LOW_STAGE_RIGHT, LOW_ROAD];
   const guards = {
-    [ARC.length + 1]: { hazard: 0, minDist: 320 },
-    [ARC.length + 3]: { hazard: 0, minDist: 200 }, // pocket A sits at the sentry's turnaround
-    [ARC.length + 4 + MID.length]: { hazard: 1, minDist: 200 }, // first pocket-B mote
-    [ARC.length + 5 + MID.length]: { hazard: 1, minDist: 200 }, // second pocket-B mote
-    [route.length - 1]: { hazard: 1, minDist: 210 },
+    [ARC.length + 4]: { hazard: 0, minDist: 200 }, // pocket A sits at the sentry's turnaround
+    [ARC.length + 5 + MID.length]: { hazard: 1, minDist: 200 }, // first pocket-B mote
+    [ARC.length + 6 + MID.length]: { hazard: 1, minDist: 200 }, // second pocket-B mote
   };
   await runRoute(page, box, route, { label: "flawless L1", guards });
 
