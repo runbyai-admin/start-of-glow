@@ -10,6 +10,7 @@ import {
 import type { Ambience } from "../audio";
 import { levelFor, LEVELS, type LevelConfig } from "../levels";
 import { VIEW_HEIGHT, VIEW_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from "./dimensions";
+import { advanceChain, CHAIN_CAP, CHAIN_WINDOW_MS, emptyChain, expireChain, resetChain, type ChainState } from "../chain";
 
 const COLLECT_RADIUS = 45;
 const HAZARD_RADIUS = 34;
@@ -37,6 +38,9 @@ const ALERT_RADIUS = HAZARD_RADIUS * 2.6;
 const ALERT_TIME_SCALE = 1.55;
 const ALERT_LIGHT_INTENSITY = 1.55;
 const CALM_LIGHT_INTENSITY = 0.9;
+const RADIANCE_RADIUS = 390;
+const RADIANCE_SLOW_MS = 1800;
+const RADIANCE_TIME_SCALE = 0.42;
 
 interface LevelInitData {
   levelIndex: number;
@@ -81,13 +85,17 @@ export class LevelScene extends Phaser.Scene {
     light: Phaser.GameObjects.Light;
     tween?: Phaser.Tweens.Tween;
     alert: boolean;
+    slowUntil: number;
   }> = [];
 
   private hud!: Phaser.GameObjects.Text;
   private levelCard!: Phaser.GameObjects.Text;
   private openLine!: Phaser.GameObjects.Text;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
   private target = new Phaser.Math.Vector2(START_X, START_Y);
+  private chainArc!: Phaser.GameObjects.Graphics;
+  private chainText!: Phaser.GameObjects.Text;
 
   private collected = 0;
   /** Motes actually placed this level - derived from the data used, never assumed from config. */
@@ -98,6 +106,7 @@ export class LevelScene extends Phaser.Scene {
   private flawlessNow = false;
   private locked = false;
   private graceUntil = 0;
+  private chainState: ChainState = emptyChain();
 
   constructor() {
     super("level");
@@ -114,6 +123,7 @@ export class LevelScene extends Phaser.Scene {
     this.levelClear = false;
     this.flawlessNow = false;
     this.locked = false;
+    this.chainState = emptyChain();
     this.moteConfigs = [];
     this.motes = [];
     this.hazards = [];
@@ -317,7 +327,7 @@ export class LevelScene extends Phaser.Scene {
         .setDepth(6)
         .setScale(rng.realInRange(0.85, 1.15));
       const light = this.lights.addLight(0, 0, 130, 0x9a6efa, CALM_LIGHT_INTENSITY);
-      const hazard = { img, light, alert: false };
+      const hazard = { img, light, alert: false, slowUntil: 0 };
       this.hazards.push(hazard);
 
       const waypoints: Phaser.Math.Vector2[] = [];
@@ -400,15 +410,21 @@ export class LevelScene extends Phaser.Scene {
     for (const h of this.hazards) {
       const dist = Phaser.Math.Distance.Between(h.img.x, h.img.y, this.wisp.x, this.wisp.y);
       const alert = dist <= ALERT_RADIUS;
-      if (alert === h.alert) continue;
       h.alert = alert;
-      if (h.tween) h.tween.timeScale = alert ? ALERT_TIME_SCALE : 1;
-      h.light.intensity = alert ? ALERT_LIGHT_INTENSITY : CALM_LIGHT_INTENSITY;
+      if (h.tween) h.tween.timeScale = this.hazardTimeScale(h);
+      h.light.intensity = h.slowUntil > this.time.now
+        ? 0.62
+        : alert ? ALERT_LIGHT_INTENSITY : CALM_LIGHT_INTENSITY;
     }
   }
 
+  private hazardTimeScale(hazard: { alert: boolean; slowUntil: number }): number {
+    if (hazard.slowUntil > this.time.now) return RADIANCE_TIME_SCALE;
+    return hazard.alert ? ALERT_TIME_SCALE : 1;
+  }
+
   private patrol(
-    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean },
+    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean; slowUntil: number },
     waypoints: Phaser.Math.Vector2[],
     index: number,
   ): void {
@@ -428,7 +444,7 @@ export class LevelScene extends Phaser.Scene {
         this.patrol(hazard, waypoints, index + 1);
       },
     });
-    if (hazard.alert) hazard.tween.timeScale = ALERT_TIME_SCALE;
+    hazard.tween.timeScale = this.hazardTimeScale(hazard);
   }
 
   private buildCamera(): void {
@@ -496,6 +512,14 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(100)
       .setScrollFactor(0);
 
+    this.chainArc = this.add.graphics().setDepth(95).setScrollFactor(0);
+    this.chainText = this.add.text(VIEW_WIDTH - 28, 24, "", {
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontSize: "15px",
+      color: "#ffd9a0",
+      letterSpacing: 2,
+    }).setOrigin(1, 0).setDepth(100).setScrollFactor(0);
+
     this.updateHud();
   }
 
@@ -511,6 +535,12 @@ export class LevelScene extends Phaser.Scene {
       this.pulse();
     });
     this.cursors = this.input.keyboard!.createCursorKeys();
+    this.wasd = {
+      up: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      down: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
   }
 
   private pulse(): void {
@@ -527,10 +557,10 @@ export class LevelScene extends Phaser.Scene {
 
     const dt = delta / 1000;
     const step = dt * WISP_MAX_SPEED;
-    if (this.cursors.left.isDown) this.target.x -= step;
-    if (this.cursors.right.isDown) this.target.x += step;
-    if (this.cursors.up.isDown) this.target.y -= step;
-    if (this.cursors.down.isDown) this.target.y += step;
+    if (this.cursors.left.isDown || this.wasd.left.isDown) this.target.x -= step;
+    if (this.cursors.right.isDown || this.wasd.right.isDown) this.target.x += step;
+    if (this.cursors.up.isDown || this.wasd.up.isDown) this.target.y -= step;
+    if (this.cursors.down.isDown || this.wasd.down.isDown) this.target.y += step;
     this.target.x = Phaser.Math.Clamp(this.target.x, 27, WORLD_WIDTH - 27);
     this.target.y = Phaser.Math.Clamp(this.target.y, 27, WORLD_HEIGHT - 27);
 
@@ -563,6 +593,11 @@ export class LevelScene extends Phaser.Scene {
     const breathe = Math.sin(time * 0.0007) * 0.12;
     this.pulseBoost = Phaser.Math.Linear(this.pulseBoost, 0, 1 - Math.pow(0.001, dt));
     this.wispLight.intensity = this.baseIntensity() + breathe + this.pulseBoost;
+
+    const beforeExpiry = this.chainState;
+    this.chainState = expireChain(this.chainState, time);
+    if (beforeExpiry !== this.chainState) this.clearChainDisplay();
+    this.drawChainBoundary(time);
 
     for (const h of this.hazards) {
       this.hazardTrail.emitParticleAt(h.img.x, h.img.y, 1);
@@ -610,11 +645,92 @@ export class LevelScene extends Phaser.Scene {
       this.motes.splice(i, 1);
       this.tweens.killTweensOf(mote);
       this.trail.explode(18, mote.x, mote.y);
-      mote.destroy();
       this.collected += 1;
-      this.ambience.chime(this.collected);
+      this.advanceChain();
+      this.ambience.chime(this.collected, this.chainState.count);
+      const pullX = this.wisp.x;
+      const pullY = this.wisp.y;
+      this.tweens.add({
+        targets: mote,
+        x: pullX,
+        y: pullY,
+        scale: 0.08,
+        alpha: 0,
+        duration: 190,
+        ease: "Cubic.easeIn",
+        onComplete: () => mote.destroy(),
+      });
+      this.collectionImpact();
       this.grow();
     }
+  }
+
+  private advanceChain(): void {
+    const result = advanceChain(this.chainState, this.time.now);
+    this.chainState = result.state;
+    if (result.released) this.releaseRadiance();
+  }
+
+  private clearChainDisplay(): void {
+    this.chainText.setText("");
+    this.chainArc.clear();
+  }
+
+  private resetChain(): void {
+    this.chainState = resetChain(this.chainState);
+    this.clearChainDisplay();
+  }
+
+  private collectionImpact(): void {
+    this.cameras.main.shake(65 + this.chainState.count * 12, 0.0009 + this.chainState.count * 0.00018);
+    this.trail.explode(14 + this.chainState.count * 4, this.wisp.x, this.wisp.y);
+    const ring = this.add.circle(this.wisp.x, this.wisp.y, 22, 0xffdfa0, 0)
+      .setStrokeStyle(2 + this.chainState.count * 0.35, 0xffdfa0, 0.72).setDepth(7);
+    this.tweens.add({
+      targets: ring,
+      radius: 54 + this.chainState.count * 13,
+      alpha: 0,
+      duration: 360 + this.chainState.count * 45,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private releaseRadiance(): void {
+    let affected = 0;
+    for (const hazard of this.hazards) {
+      const distance = Phaser.Math.Distance.Between(hazard.img.x, hazard.img.y, this.wisp.x, this.wisp.y);
+      if (!hazard.alert || distance > RADIANCE_RADIUS) continue;
+      hazard.slowUntil = this.time.now + RADIANCE_SLOW_MS;
+      if (hazard.tween) hazard.tween.timeScale = RADIANCE_TIME_SCALE;
+      affected += 1;
+    }
+    this.ambience.radiance();
+    this.cameras.main.shake(260, 0.004);
+    this.cameras.main.flash(170, 255, 222, 160);
+    const wave = this.add.circle(this.wisp.x, this.wisp.y, 32, 0xffe2a8, 0.08)
+      .setStrokeStyle(5, 0xffe2a8, 0.92).setDepth(8);
+    this.tweens.add({
+      targets: wave,
+      radius: RADIANCE_RADIUS,
+      alpha: 0,
+      duration: 760,
+      ease: "Cubic.easeOut",
+      onComplete: () => wave.destroy(),
+    });
+    this.chainText.setText(affected > 0 ? "RADIANCE · SHADOWS SLOWED" : "RADIANCE");
+  }
+
+  private drawChainBoundary(time: number): void {
+    this.chainArc.clear();
+    if (this.chainState.count <= 0) return;
+    const remaining = Phaser.Math.Clamp((this.chainState.deadline - time) / CHAIN_WINDOW_MS, 0, 1);
+    const color = this.chainState.count === CHAIN_CAP ? 0xffdfa0 : 0x9fcfff;
+    this.chainArc.lineStyle(3, color, 0.72);
+    this.chainArc.beginPath();
+    this.chainArc.arc(VIEW_WIDTH - 43, 64, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
+    this.chainArc.strokePath();
+    if (this.chainState.count < CHAIN_CAP) this.chainText.setText(`LUMEN ${this.chainState.count}/${CHAIN_CAP}`);
   }
 
   /** How many motes open the beacon this level (defensively never above what was actually placed). */
@@ -716,6 +832,7 @@ export class LevelScene extends Phaser.Scene {
       ease: "Quad.easeIn",
     });
     this.wisp.setScale(0.2);
+    this.resetChain();
 
     this.after(560, () => {
       this.target.set(START_X, START_Y);
@@ -794,6 +911,10 @@ export class LevelScene extends Phaser.Scene {
       wispY: Math.round(this.wisp.y),
       motes: this.motes.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y) })),
       hazards: this.hazards.map((h) => ({ x: Math.round(h.img.x), y: Math.round(h.img.y) })),
+      chain: this.chainState.count,
+      chainRemainingMs: Math.max(0, Math.round(this.chainState.deadline - this.time.now)),
+      radianceWaves: this.chainState.waves,
+      slowedHazards: this.hazards.filter((h) => h.slowUntil > this.time.now).length,
     };
   }
 }

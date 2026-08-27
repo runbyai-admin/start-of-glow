@@ -2,6 +2,28 @@
 
 One entry per round, written by that round's winner as part of banking the win: what changed and why, in enough detail that the other two contestants can pick it up tomorrow.
 
+## Round 2 - OpenAI candidate (playable menu + lumen chain, 2026-08-26)
+
+Round 1's owner feedback was unusually specific: OpenAI was the close loser and generally stronger, but collecting light—the most repeated action—lacked weight, and its sound missed the mood. This candidate starts from Claude's canonical winner and answers that gap without discarding its three-level optional/flawless route.
+
+**Extended-window depth pass (2026-08-27).** The first judging pass produced no winner: all three candidates felt thin and interchangeable, and their basic shells counted as part of the game. This branch therefore adds no new mechanic. It concentrates the extension on the first fifteen seconds. The former title-over-stars screen is now an authored Light2D forest threshold with layered hills, lit tree silhouettes, foreground ground, drifting firefly depth, a warm destination, and a five-mote path drawn through the clearing. The wisp has displacement-led stretch and lean, a fading afterglow, and a slightly trailing light; nearby motes anticipate contact by magnetizing, then wake the forest and threshold one step at a time. The fifth pickup blooms the way open without making it a requirement. Click/touch, Enter or Space still registers immediately, now pulling the title, wisp and threshold into one short transition. All art remains runtime-generated, and the level/lumen-chain rules are unchanged.
+
+**The menu is already play.** Pointer movement and arrows/WASD steer the title wisp through five composed motes, previewing the same pull, ring, growing light, and harmonic response used in the world. Click/touch, Enter or Space still begins immediately; movement keys never throw the player into level 1. A clear `ENTER THE FOREST` invitation remains visible, and one quiet line responds as the player wakes the path.
+
+**Collection now creates a tactical chain.** Consecutive pickups inside a visible four-second boundary build to five. Motes pull into the wisp instead of blinking away; rings, particles, camera response, and the fully synthesized collect voice grow in layers. The first cap releases a warm radiance wave that briefly slows only nearby, alerted shadows. Per-hazard slowdown state resolves through the same function as alert speed, so patrol legs cannot cancel it. The capped chain cannot reward twice; expiry and damage reset it.
+
+**Input parity is explicit.** Level play now supports WASD alongside arrows, pointer, and touch. The mechanic adds no control and grants no invulnerability or permanent hazard removal.
+
+Public architecture and the browser test hook now describe the menu and chain state. Verification covers typecheck, workspace/ledger guards, production build, deterministic chain behavior, and the affected real-input menu/opening path. The inherited full-play gate repeatedly proved the 10/14 optional route and open beacon, but its generic recovery/flee driver remained unstable under multi-second software-renderer frames; that is reported as partial gate evidence, not a complete path or a game defect.
+
+**Test isolation and pacing fixes.** The inherited Playwright config reused any process on port 4173. On the shared host that silently drove another contestant's already-running preview instead of this candidate. This branch uses strict port 4183 for both preview and Playwright; the other process was left untouched. The smoke test also stops after the deterministic opening arc instead of spending minutes on a nondeterministic broad sweep across hazard lanes; fast chain tests carry the timing/reset/reward truth.
+
+The full-play driver uses the same isolated port and a 240-second per-leg wall budget. This changes no game clock or input: it only lets real mouse movement receive enough rendered frames when the shared host falls below one frame per second.
+
+Its cautious route now uses the authored safe margins: around the fixed vertical sentry via the visibly open top edge, down to the far-side mote, then under the beacon circuit along y=680 before rising to the low-road mote. The old timed paths repeatedly failed at the same crossings under multi-second frames despite an earlier run reaching the beacon; the route change removes renderer-dependent timing from the harness without changing the game or bypassing input.
+
+The full-path gate does not require a four-second chain cap under that degraded renderer: when frames themselves take multiple seconds, such an assertion measures the host rather than the mechanic. The deterministic chain tests prove cap/expiry/reset/one-shot semantics, and the real-bundle smoke path proves collected motes enter the live chain.
+
 ## Round 0 - template (owner, 2026-08-17)
 
 The starting point, before any round: TypeScript + Vite + Phaser with a boot scene that proves the Light2D pipeline (dark ambient, silhouette forest, a glowing light-being with a following light and a particle trail, motes that grow the glow when collected), Playwright smoke tests, the `npm run check` repo guard, and `deploy.sh` publishing to the four stable URLs.

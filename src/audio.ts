@@ -82,8 +82,8 @@ export class Ambience {
     }
   }
 
-  /** A short bell, pitch stepping through a small pentatonic set per pickup. */
-  chime(step: number): void {
+  /** A felt-glass collect voice whose body and harmony deepen with the active chain. */
+  chime(step: number, chain = 1): void {
     if (!this.ctx || !this.master) return;
     try {
       const ctx = this.ctx;
@@ -93,12 +93,12 @@ export class Ambience {
       const now = ctx.currentTime;
 
       const body = ctx.createOscillator();
-      body.type = "sine";
+      body.type = chain >= 4 ? "triangle" : "sine";
       body.frequency.value = freq;
       const bodyGain = ctx.createGain();
       bodyGain.gain.setValueAtTime(0.0001, now);
-      bodyGain.gain.linearRampToValueAtTime(0.18, now + 0.02);
-      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+      bodyGain.gain.linearRampToValueAtTime(0.14 + chain * 0.018, now + 0.015);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7 + chain * 0.08);
 
       const partial = ctx.createOscillator();
       partial.type = "sine";
@@ -117,8 +117,44 @@ export class Ambience {
       body.stop(now + 0.95);
       partial.start(now);
       partial.stop(now + 0.65);
+      if (chain >= 2) {
+        const harmony = ctx.createOscillator();
+        harmony.type = "sine";
+        harmony.frequency.value = freq * (chain >= 5 ? 1.5 : 1.25);
+        const harmonyGain = ctx.createGain();
+        harmonyGain.gain.setValueAtTime(0.0001, now);
+        harmonyGain.gain.linearRampToValueAtTime(0.025 + chain * 0.008, now + 0.025);
+        harmonyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
+        harmony.connect(harmonyGain);
+        harmonyGain.connect(master);
+        harmony.start(now);
+        harmony.stop(now + 0.8);
+      }
     } catch {
       /* a missed chime is not a game-breaking error */
+    }
+  }
+
+  /** Low warm bloom at a full chain: distinct from pickup and beacon voices. */
+  radiance(): void {
+    if (!this.ctx || !this.master) return;
+    try {
+      const now = this.ctx.currentTime;
+      [130.81, 196, 261.63, 392].forEach((frequency, index) => {
+        const oscillator = this.ctx!.createOscillator();
+        oscillator.type = index === 0 ? "triangle" : "sine";
+        oscillator.frequency.value = frequency;
+        const gain = this.ctx!.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.08 - index * 0.01, now + 0.05 + index * 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.25);
+        oscillator.connect(gain);
+        gain.connect(this.master!);
+        oscillator.start(now);
+        oscillator.stop(now + 1.3);
+      });
+    } catch {
+      /* atmosphere only */
     }
   }
 
