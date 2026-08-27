@@ -52,7 +52,58 @@ test("the title screen comes up with the light pipeline running", async ({ page 
   expect((await page.evaluate(() => window.__glow))?.scene).toBe("menu");
 
   await page.screenshot({ path: "test-results/menu.png" });
+
+  // Finish the composed path without crossing the explicit start boundary.
+  // Live positions matter because nearby motes visibly magnetize toward the
+  // wisp; the test follows that same on-screen information a player sees.
+  for (;;) {
+    const glow = await page.evaluate(() => window.__glow);
+    if ((glow?.remaining ?? 0) === 0) break;
+    const next = glow?.motes[0];
+    expect(next).toBeDefined();
+    const before = glow!.remaining;
+    await page.mouse.move(box!.x + (next!.x * box!.width) / 1280, box!.y + (next!.y * box!.height) / 720);
+    await page.waitForFunction((remaining) => (window.__glow?.remaining ?? remaining) < remaining, before, { timeout: 10_000 });
+  }
+  const complete = await page.evaluate(() => window.__glow);
+  expect(complete?.scene).toBe("menu");
+  expect(complete?.collected).toBe(5);
+  expect(complete?.radianceWaves).toBe(1);
+  await page.screenshot({ path: "test-results/menu-complete.png" });
   expect(consoleErrors, `console errors: ${consoleErrors.join(" | ")}`).toEqual([]);
+});
+
+test("the authored threshold keeps immediate keyboard and touch start parity", async ({ browser }) => {
+  test.setTimeout(90_000);
+  const starts: Array<{ name: string; action: "Enter" | "Space" | "tap"; touch?: boolean }> = [
+    { name: "Enter", action: "Enter" },
+    { name: "Space", action: "Space" },
+    { name: "touch", action: "tap", touch: true },
+  ];
+
+  for (const start of starts) {
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:4183",
+      viewport: { width: 1280, height: 720 },
+      hasTouch: Boolean(start.touch),
+    });
+    const page = await context.newPage();
+    const consoleErrors = collectConsoleErrors(page);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("body[data-game-ready='true']", { timeout: 30_000 });
+
+    if (start.action === "tap") {
+      const box = await page.locator("canvas").boundingBox();
+      expect(box, `${start.name} canvas bounds`).not.toBeNull();
+      await page.touchscreen.tap(box!.x + box!.width * 0.82, box!.y + box!.height * 0.62);
+    } else {
+      await page.keyboard.press(start.action);
+    }
+
+    await page.waitForFunction(() => window.__glow?.scene === "level", undefined, { timeout: 15_000 });
+    expect(consoleErrors, `${start.name} console errors: ${consoleErrors.join(" | ")}`).toEqual([]);
+    await context.close();
+  }
 });
 
 test("starting the game loads level 1, and the light-being follows input and collects motes", async ({ page }) => {
