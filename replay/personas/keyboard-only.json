@@ -1,0 +1,11 @@
+{
+  "name": "keyboard-only",
+  "description": "Never touches the mouse: Enter to begin, arrow keys to steer. The wisp's capped keyboard step, not a cursor flick.",
+  "seed": 20260831,
+  "input": "keys",
+  "phases": [
+    { "untilSeconds": 1.5, "mode": "wait" },
+    { "untilSeconds": 1.6, "mode": "start" },
+    { "mode": "collect", "safeDist": 150, "fleeDist": 150 }
+  ]
+}

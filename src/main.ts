@@ -3,6 +3,13 @@ import { MenuScene } from "./scenes/MenuScene";
 import { LevelScene } from "./scenes/LevelScene";
 import { EndingScene } from "./scenes/EndingScene";
 import { VIEW_HEIGHT, VIEW_WIDTH } from "./scenes/dimensions";
+import { installReplay, replayRequest, seedRandom } from "./replay";
+
+// Read before the Game is built: replay mode needs the seeded RNG in place
+// before any texture or scene is created. Absent the flag this is null and
+// nothing below changes - the judged URL is untouched.
+const replay = replayRequest();
+if (replay) seedRandom(replay.seed);
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -27,6 +34,19 @@ const config: Phaser.Types.Core.GameConfig = {
     pixelArt: false,
   },
   scene: [MenuScene, LevelScene, EndingScene],
+  ...(replay
+    ? {
+        // Fixed-timestep replay: no delta smoothing (it would average the
+        // exact 16.667 ms step against Phaser's history) and no Phaser sound
+        // manager, because replay hands the game its own offline audio context.
+        fps: { target: 60, smoothStep: false },
+        audio: { noAudio: true },
+        // Phaser seeds its own RND from Date.now(), which alone is enough to
+        // make two runs of the same persona drift a pixel apart.
+        seed: [String(replay.seed)],
+      }
+    : {}),
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+if (replay) installReplay(game, replay);

@@ -32,4 +32,6 @@ interface GlowTestState {
 
 interface Window {
   __glow?: GlowTestState;
+  /** Only present under ?glow-replay= - see src/replay.ts. */
+  __glowReplay?: import("./replay").GlowReplay;
 }

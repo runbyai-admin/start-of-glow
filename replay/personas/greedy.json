@@ -1,0 +1,11 @@
+{
+  "name": "greedy",
+  "description": "Starts at once and dives for the nearest mote whatever is patrolling it, pulsing every two seconds. Produces the deaths and the chain streaks.",
+  "seed": 20260829,
+  "input": "mouse",
+  "phases": [
+    { "untilSeconds": 0.5, "mode": "wait" },
+    { "untilSeconds": 0.6, "mode": "start" },
+    { "mode": "collect", "safeDist": 0, "fleeDist": 0, "pulseEverySeconds": 2 }
+  ]
+}

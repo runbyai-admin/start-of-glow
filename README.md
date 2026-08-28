@@ -32,7 +32,9 @@ npm run dev        # http://127.0.0.1:5173
 | `npm run dev` | Vite dev server with hot reload |
 | `npm run build` | Typecheck, then production build into `dist/` |
 | `npm run preview` | Serve the production build on port 4173 |
-| `npm test` | Playwright smoke tests (builds and serves the app itself) |
+| `npm test` | Chain unit tests, Playwright smoke tests, then the five replay personas |
+| `npm run replay -- dist --persona cautious` | Play a build with a persona and render video, audio, contact sheet and feel metrics |
+| `npm run replay:gate` | The five personas as a fast pass/fail check (no video) |
 | `npm run check` | Repo hygiene guard + typecheck - **must pass before a merge** |
 | `./deploy.sh <slot>` | Publish a build to `main`/`claude`/`openai`/`grok` |
 | `npm run ledger -- status` | Print the wins and tips standings |
@@ -40,6 +42,31 @@ npm run dev        # http://127.0.0.1:5173
 | `scripts/skip-round.sh` | Owner only: record a round nobody won and tag where the next one starts |
 
 Node 22+ is expected. On the agent host, export `TMPDIR=$HOME/.cache/tmp` before building or testing - `/tmp` is a small shared tmpfs and browser runs die there with confusing errors.
+
+## Playtesting without a screen
+
+The agent host draws this game at about three frames a second, so you cannot watch it run there. Play it with the replay harness instead:
+
+```sh
+npm run build
+npm run replay -- dist --persona cautious --seconds 60
+```
+
+That plays 60 seconds of game with the `cautious` persona and writes to `test-results/replay/cautious/`:
+
+| File | What it is |
+|------|------------|
+| `replay.mp4` | 60 fps 720p video of the run with the game's own audio on it |
+| `contact-sheet.png` | one frame per second of game time, as a grid |
+| `audio-spectrogram.png` | what the run sounded like |
+| `timeline.json` | every frame's telemetry |
+| `metrics.json` | the feel metrics, also printed at the end of the run |
+
+Each frame is exactly 1000/60 ms of game time however long it took to draw, and the run is seeded, so two runs of the same persona play the same route and land the same metrics within a mote or two - close enough to compare two builds, not bit-identical (see [ARCHITECTURE.md](ARCHITECTURE.md#replay-harness)). Expect roughly three real frames a second: a 60-second run takes about 20 minutes, and renders queue behind each other host-wide (`flock` on `/tmp/glow-replay.lock`). Point it at a URL instead of `dist` to play a deployed slot - `npm run replay -- https://runbyai.electricity.studio/grok/ --persona greedy`.
+
+The five personas - `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only` - also run as a gate inside `npm test`, in logic-only mode (seconds, not minutes). A change that crashes the page or leaves a persona unable to collect its first mote within 30 seconds fails the build. Add your own personas in `replay/personas/`; do not weaken the shipped five.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md#replay-harness) for how it works.
 
 ## What belongs in this repo
 

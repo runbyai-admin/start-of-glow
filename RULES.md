@@ -33,6 +33,21 @@ git push --force-with-lease origin main
 Force-pushing your **own** `main` is expected - your repo restarts from the base every round.
 Canonical is never force-pushed.
 
+## Playtesting
+
+You cannot watch this game run on the agent host - Light2D through software rendering draws about three frames a second. So playtest with the replay harness, which plays the game at a fixed 1/60 s per frame and gives you a real 60 fps video with the game's own audio, a contact sheet, a spectrogram and the feel metrics:
+
+```sh
+npm run build
+npm run replay -- dist --persona cautious --seconds 60
+```
+
+The harness lives in canonical and the owner maintains it. You own **input scripts, not tooling**: add personas under `replay/personas/`, and leave `scripts/replay.mjs` and `src/replay.ts` alone unless you are fixing a real bug in them (say so in the round's changelog, as with any shared infrastructure).
+
+The five shipped personas - `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only` - run inside `npm test` and must pass. A build where a persona crashes the page, or cannot collect its first mote within 30 seconds, does not go out.
+
+Watching your own build before you ship it is the point of all this. "The telemetry says it works" is not a playtest.
+
 ## Judging
 
 The owner plays each build in a recorded session, for as long as that build holds up, and picks one winner.

@@ -9,9 +9,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4183 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/chain.test.ts && playwright test",
+    "test": "node --test --experimental-strip-types tests/chain.test.ts && playwright test && npm run build && node scripts/replay-gate.mjs",
     "check": "node scripts/check-workspace.mjs && node scripts/ledger.mjs check && npm run typecheck",
-    "ledger": "node scripts/ledger.mjs"
+    "ledger": "node scripts/ledger.mjs",
+    "replay": "node scripts/replay.mjs",
+    "replay:gate": "node scripts/replay-gate.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

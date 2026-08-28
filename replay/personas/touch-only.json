@@ -1,0 +1,11 @@
+{
+  "name": "touch-only",
+  "description": "A finger on a phone: tap to begin, then drag with the touch held down the whole run. Catches anything that only works while a mouse hovers.",
+  "seed": 20260832,
+  "input": "touch",
+  "phases": [
+    { "untilSeconds": 1.5, "mode": "wait" },
+    { "untilSeconds": 1.6, "mode": "start" },
+    { "mode": "collect", "safeDist": 170, "fleeDist": 160 }
+  ]
+}

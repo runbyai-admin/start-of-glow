@@ -1,0 +1,12 @@
+{
+  "name": "idle-15s",
+  "description": "Starts the game and then does nothing for fifteen seconds - what the screen does when nobody is playing - before collecting normally.",
+  "seed": 20260830,
+  "input": "mouse",
+  "phases": [
+    { "untilSeconds": 1.5, "mode": "wait" },
+    { "untilSeconds": 1.6, "mode": "start" },
+    { "untilSeconds": 16.6, "mode": "idle" },
+    { "mode": "collect", "safeDist": 170, "fleeDist": 160 }
+  ]
+}
