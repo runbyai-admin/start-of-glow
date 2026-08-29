@@ -19,8 +19,9 @@
  * - it falls back to "compat" mode: real input, wall-clock frames, no audio,
  * and every output says so.
  *
- * Renders are serialised host-wide with flock on /tmp/glow-replay.lock, so
- * three panes asking for a video at once queue instead of thrashing the cores.
+ * Renders are serialised host-wide with flock on /tmp/glow-replay.lock (kept
+ * 0666 because the accounts sharing it are separate Linux users), so three
+ * panes asking for a video at once queue instead of thrashing the cores.
  */
 import { chromium } from "@playwright/test";
 import { spawn, spawnSync } from "node:child_process";
@@ -76,7 +77,18 @@ function parseArgs(argv) {
  */
 function serialiseOrExit(opts, argv) {
   if (!opts.lock || !opts.render || process.env.GLOW_REPLAY_LOCKED === "1") return false;
-  fs.closeSync(fs.openSync(LOCK_FILE, "a"));
+  // The four accounts that render on this host are four Linux users, so the
+  // lock file has to be writable by all of them: created 0644 by whoever runs
+  // first, every other account gets "flock: cannot open lock file: Permission
+  // denied" and its render dies before it starts. Create it 0666 and repair
+  // the mode when we own it; a file someone else owns at 0666 is already fine.
+  fs.closeSync(fs.openSync(LOCK_FILE, "a", 0o666));
+  try {
+    fs.chmodSync(LOCK_FILE, 0o666);
+  } catch {
+    // owned by another account and already usable, or we cannot fix it - flock
+    // below reports the real problem either way.
+  }
   log(`waiting for the host render lock (${LOCK_FILE})`);
   const child = spawnSync("flock", ["-w", "7200", LOCK_FILE, process.execPath, ...argv], {
     stdio: "inherit",
