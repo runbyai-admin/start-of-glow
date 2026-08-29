@@ -14,6 +14,33 @@
       "winner": "openai",
       "verdict": "OpenAI is the only build with an improvement: the menu is ok, the mechanics still are not good, but Claude's game sounds are broken and its menu is barely changed, and Grok's has circles with no function.",
       "commit": "4051b6fc27c8002de9d366e2020e4bc1656ac143"
+    },
+    {
+      "round": 3,
+      "date": "2026-08-29",
+      "winner": "claude",
+      "verdict": "Claude by a hair - the pull is a real mechanic, but with no cooldown there is no decision in it.",
+      "commit": "f96827ad6ff1d0920b3e3b80bdc64b976c356509",
+      "builds": {
+        "claude": {
+          "did": "Spammed the pull - nothing stopped me from using it constantly.",
+          "stopped": "Stopped because past the pull there was nothing more to find.",
+          "keep": "The pull mechanic as the core verb.",
+          "kill": "The free, cooldown-free use of it - pull has to cost something."
+        },
+        "openai": {
+          "did": "Played it like the old champion - I could not tell what mechanic this round added.",
+          "stopped": "Stopped because there was no new thing to do with the light, nothing to grab me.",
+          "keep": "Nothing from this round.",
+          "kill": "This round's work - redo it as one visible mechanic."
+        },
+        "grok": {
+          "did": "Fought the presentation - the mechanic was fine but the rough look and feel got in the way.",
+          "stopped": "Stopped because it was too rough to enjoy: a good mechanic under unpleasant presentation.",
+          "keep": "Your call - I would not add anything from this build to the champion yet.",
+          "kill": "Your call."
+        }
+      }
     }
   ],
   "tips": []
