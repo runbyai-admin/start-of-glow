@@ -41,8 +41,8 @@ const WISP_MAX_SPEED = 480;
  * That is the other half of the round's verb - spending light buys you dark.
  */
 const ALERT_RADIUS_FLOOR = HAZARD_RADIUS * 2.4;
-const ALERT_RADIUS_PER_REACH = 0.55;
-const ALERT_RADIUS_CEILING = 270;
+const ALERT_RADIUS_PER_REACH = 0.6;
+const ALERT_RADIUS_CEILING = 290;
 const ALERT_TIME_SCALE = 1.55;
 const ALERT_LIGHT_INTENSITY = 1.55;
 const CALM_LIGHT_INTENSITY = 0.9;
@@ -61,9 +61,9 @@ const RADIANCE_TIME_SCALE = 0.42;
  * before a shadow arrives. Walking into motes is what makes you bright again. The lit radius IS the rule: there is nothing to read, you can see how
  * far you can reach because that is exactly as far as you can see.
  */
-const REACH_START = 400;
+const REACH_START = 390;
 const REACH_MIN = 170;
-const REACH_MAX = 520;
+const REACH_MAX = 470;
 const REACH_PER_MOTE = 32;
 const GATHER_COST = 170;
 const GATHER_COOLDOWN_MS = 420;
@@ -117,6 +117,8 @@ export class LevelScene extends Phaser.Scene {
     light: Phaser.GameObjects.Light;
     tween?: Phaser.Tweens.Tween;
     alert: boolean;
+    /** 0 at the edge of notice, 1 at hunting range - the speed-up ramps across it. */
+    pressure: number;
     slowUntil: number;
   }> = [];
 
@@ -133,6 +135,7 @@ export class LevelScene extends Phaser.Scene {
   private reachLine?: Phaser.GameObjects.Text;
   private inviteAt = 0;
   private lastShakeAt = 0;
+  private gutter = 0;
   private deathVeil!: Phaser.GameObjects.Rectangle;
   private inviteShown = 0;
   private incoming: Phaser.GameObjects.Image[] = [];
@@ -171,6 +174,7 @@ export class LevelScene extends Phaser.Scene {
     this.gathers = 0;
     this.inviteAt = 0;
     this.inviteShown = 0;
+    this.gutter = 0;
     this.reachLine = undefined;
     this.taught = data.taught ?? false;
     this.levelClear = false;
@@ -387,7 +391,7 @@ export class LevelScene extends Phaser.Scene {
         .setDepth(6)
         .setScale(rng.realInRange(0.85, 1.15));
       const light = this.lights.addLight(0, 0, 130, 0x9a6efa, CALM_LIGHT_INTENSITY);
-      const hazard = { img, light, alert: false, slowUntil: 0 };
+      const hazard = { img, light, alert: false, pressure: 0, slowUntil: 0 };
       this.hazards.push(hazard);
 
       const waypoints: Phaser.Math.Vector2[] = [];
@@ -466,15 +470,27 @@ export class LevelScene extends Phaser.Scene {
    * telegraph. Patrol *shape* never changes, only its pace and how visible
    * it is - a hazard should feel alive without ever feeling like it cheated.
    */
+  /**
+   * Noticing and hunting are two different distances. A shadow *sees* the light
+   * as far as the light carries (alertRadius, which grows with the reach), and
+   * that is a look: its own glow comes up so the player can read it from across
+   * the glade. It only *hunts* at close quarters, and the speed-up ramps in
+   * between. Coupling the full chase speed to the reach - the first version of
+   * this - punished the one player who most needs help, the one who has not
+   * found the press yet and is therefore walking around at full brightness.
+   */
   private checkHazardAlerts(): void {
+    const notice = this.alertRadius();
     for (const h of this.hazards) {
       const dist = Phaser.Math.Distance.Between(h.img.x, h.img.y, this.wisp.x, this.wisp.y);
-      const alert = dist <= this.alertRadius();
-      h.alert = alert;
+      h.alert = dist <= notice;
+      h.pressure = h.alert
+        ? Phaser.Math.Clamp(1 - (dist - ALERT_RADIUS_FLOOR) / Math.max(1, notice - ALERT_RADIUS_FLOOR), 0, 1)
+        : 0;
       if (h.tween) h.tween.timeScale = this.hazardTimeScale(h);
       h.light.intensity = h.slowUntil > this.time.now
         ? 0.62
-        : alert ? ALERT_LIGHT_INTENSITY : CALM_LIGHT_INTENSITY;
+        : CALM_LIGHT_INTENSITY + (ALERT_LIGHT_INTENSITY - CALM_LIGHT_INTENSITY) * (h.alert ? 0.4 + 0.6 * h.pressure : 0);
     }
   }
 
@@ -483,13 +499,13 @@ export class LevelScene extends Phaser.Scene {
     return Phaser.Math.Clamp(this.reach * ALERT_RADIUS_PER_REACH, ALERT_RADIUS_FLOOR, ALERT_RADIUS_CEILING);
   }
 
-  private hazardTimeScale(hazard: { alert: boolean; slowUntil: number }): number {
+  private hazardTimeScale(hazard: { alert: boolean; pressure: number; slowUntil: number }): number {
     if (hazard.slowUntil > this.time.now) return RADIANCE_TIME_SCALE;
-    return hazard.alert ? ALERT_TIME_SCALE : 1;
+    return 1 + (ALERT_TIME_SCALE - 1) * hazard.pressure;
   }
 
   private patrol(
-    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean; slowUntil: number },
+    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean; pressure: number; slowUntil: number },
     waypoints: Phaser.Math.Vector2[],
     index: number,
   ): void {
@@ -798,6 +814,31 @@ export class LevelScene extends Phaser.Scene {
     return 1.6 + this.collected * 0.06;
   }
 
+  /**
+   * Make the number felt. Reach is the only stat in the game and it never gets
+   * a HUD line, so it has to be legible in the light itself: a wide reach
+   * burns white and streams sparks, a spent one guts down to a small cold
+   * flicker. The gutter is the tell that a press just cost you something real.
+   */
+  private reachFeel(time: number, dt: number): number {
+    const t = Phaser.Math.Clamp((this.reach - REACH_MIN) / (REACH_MAX - REACH_MIN), 0, 1);
+    // Frequency only - the emitter's alpha ramp is what fades a spark out, and
+    // overriding it with a constant makes the trail pop instead of dissolve.
+    this.trail.frequency = 64 - t * 34;
+    this.wisp.setAlpha(0.78 + t * 0.22);
+
+    // Below a third of the range the light is running out: a fast, shallow
+    // flicker on top of the slow breath, so "nearly spent" is visible before
+    // it is a problem.
+    if (t > 0.34) {
+      this.gutter = Phaser.Math.Linear(this.gutter, 0, 1 - Math.pow(0.02, dt));
+      return this.gutter;
+    }
+    const depth = (0.34 - t) / 0.34;
+    this.gutter = Math.sin(time * 0.021) * 0.1 * depth + Math.sin(time * 0.053) * 0.06 * depth;
+    return this.gutter;
+  }
+
   update(time: number, delta: number): void {
     if (this.locked) return;
 
@@ -838,7 +879,7 @@ export class LevelScene extends Phaser.Scene {
 
     const breathe = Math.sin(time * 0.0007) * 0.12;
     this.pulseBoost = Phaser.Math.Linear(this.pulseBoost, 0, 1 - Math.pow(0.001, dt));
-    this.wispLight.intensity = this.baseIntensity() + breathe + this.pulseBoost;
+    this.wispLight.intensity = this.baseIntensity() + breathe + this.pulseBoost + this.reachFeel(time, dt);
 
     this.drawReachRing(time);
     this.inviteGather();
