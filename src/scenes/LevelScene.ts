@@ -363,6 +363,10 @@ export class LevelScene extends Phaser.Scene {
     // this radius, but a soft gradient does not tell you where the rule ends -
     // this does, and it only becomes bright when there is something to take.
     this.reachRing = this.add.graphics().setDepth(4);
+    // One source of truth for the wisp's size: derive the spawn scale from the
+    // starting reach rather than leaving a hand-set 0.5 that the first collect
+    // would silently correct.
+    this.setReach(REACH_START);
   }
 
   /**
