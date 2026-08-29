@@ -28,8 +28,9 @@ public/assets/             committed assets you generated (images, audio) - copi
 src/global.d.ts            the window.__glow test hook contract
 src/replay.ts              replay mode: fixed timestep, seeded RNG, injected input, offline audio (loads only under ?glow-replay=)
 scripts/replay.mjs         the replay harness - video, audio, contact sheet, spectrogram, timeline, feel metrics
-scripts/replay-gate.mjs    the five personas as a pass/fail gate, part of `npm test`
-replay/personas/*.json     the five shipped input scripts
+scripts/replay-gate.mjs    the six personas as a pass/fail gate, part of `npm test`
+replay/personas/*.json     the six shipped input scripts
+scripts/render-queue.sh    the host-wide render queue every render takes a slot from
 tests/smoke.spec.ts        the smoke tests every build must pass
 tests/chain.test.ts        fast deterministic chain timing/reset/reward contract
 scripts/check-workspace.mjs   repo hygiene guard behind `npm run check`
@@ -61,11 +62,11 @@ Unchanged in spirit from the base slice, extended into an actual win condition. 
 
 ## Optional collection: the risk/reward decision
 
-`requiredMotes` (10/13/16 of 14/18/22) opens the beacon; the rest of the motes are the player's own call. In the hand-authored level 1 the optional motes are exactly the ones inside the guarded pockets, so "skip it or brave it" is a real spatial decision, not a formality. Collecting *every* mote flips the level into its flawless variant - the beacon jumps to full alpha, its light brightens and warms (`setColor(0xffe9c0)`), the pulse deepens, and `completeLevel()` plays a fuller six-note run instead of four. The HUD states the contract plainly the whole way: `beacon at N` before it opens, `beacon open` after, `flawless` at full collection. A per-run `flawless` count rides forward through `scene.start()` data exactly like `resets`, and the ending reports it with one line when it is non-zero (nothing is said on a run that skipped motes - the choice was allowed, so it is not scolded). A fail resets the flawless state along with everything else in the attempt.
+`requiredMotes` (10/13/16 of 14/18/22) opens the beacon; the rest of the motes are the player's own call. In the hand-authored level 1 the optional motes are exactly the ones inside the guarded pockets, so "skip it or brave it" is a real spatial decision, not a formality. Collecting *every* mote flips the level into its flawless variant - the beacon jumps to full alpha, its light brightens and warms (`setColor(0xffe9c0)`), the pulse deepens, and `completeLevel()` plays a fuller six-note run instead of four. The HUD states the contract plainly the whole way: `LEVEL n/3`, `motes n/total` with `beacon at N` before it opens, `beacon open` after, `flawless` at full collection, and the run's `resets`. A per-run `flawless` count rides forward through `scene.start()` data exactly like `resets`, and the ending reports it with one line when it is non-zero (nothing is said on a run that skipped motes - the choice was allowed, so it is not scolded). A fail resets the flawless state along with everything else in the attempt.
 
 ## Lumen chain: collection has tactical weight
 
-Each pickup inside the previous pickup's four-second boundary advances a chain capped at five. The boundary is a small decaying arc at the upper right, paired with `LUMEN n/5`; expiry or damage clears it. A collected mote now eases into the moving wisp instead of vanishing, and each step scales the world ring, particle burst, restrained camera response, and synthesized felt-glass harmony.
+Each pickup inside the previous pickup's four-second boundary advances a chain capped at five. The boundary is a small decaying arc at the upper right - the arc is the whole readout, with no number next to it; expiry or damage clears it. The one line that shares that corner, `shadows slowed` after a released wave, fades out after a beat instead of sitting there for the chain's full four seconds. A collected mote now eases into the moving wisp instead of vanishing, and each step scales the world ring, particle burst, restrained camera response, and synthesized felt-glass harmony.
 
 The first time a chain reaches five, `releaseRadiance()` emits one warm world-space wave. Only nearby hazards that are already alerted are slowed, for 1.8 seconds, by per-hazard `slowUntil` state. `hazardTimeScale()` is the single resolver for calm, alert, and slowed playback, so the per-frame alert check and the next patrol leg cannot overwrite the reward. A capped chain may be extended by more pickups but cannot fire twice; only expiry or damage creates a new chain. The wave is temporary control, not removal, damage immunity, or a substitute for the beacon/flawless choice.
 
@@ -73,9 +74,13 @@ The first time a chain reaches five, `releaseRadiance()` emits one warm world-sp
 
 Shadow-wisps - the thing the light is not. `makeHazardTexture` draws an irregular dark blob (not a circle; the wisp already owns "perfect radial glow", so the hazard needed to read as a different *kind* of thing at a glance) with a thin cold-violet rim, and each carries a small, dim `Light2D` light of its own (`0x9a6efa`, radius 130) - not because a real shadow would glow, but because a threat the player cannot see coming in a game about darkness is cheap, not hard. Each hazard patrols a loop of three deterministic waypoints via chained tweens (`LevelScene.patrol()`), at the level's `hazardSpeed`. Touching one (`HAZARD_RADIUS`, checked every frame once the level's opening grace period has passed) calls `fail()`.
 
-**Hazards notice proximity.** `checkHazardAlerts()` runs every frame: a hazard within `ALERT_RADIUS` (2.6x `HAZARD_RADIUS`) of the wisp for even one frame flips into an "alert" state - its *currently running* patrol tween gets `timeScale = ALERT_TIME_SCALE` (faster playback of the same eased path, not a different path) and its light's intensity rises from `CALM_LIGHT_INTENSITY` toward `ALERT_LIGHT_INTENSITY` as a fair telegraph. `patrol()` now stores the live tween on the hazard object (`hazard.tween`) specifically so this can reach in and adjust it; the last line of `patrol()` re-applies the current alert `timeScale` to a freshly created next-leg tween, so the boost doesn't silently reset to calm at a waypoint if the player is still close. The patrol *shape* stays exactly as seeded and fully deterministic for a fixed play - only pace and visibility change - so builds stay comparable in judging the way "Deterministic layout" below already requires, while a returning player still has to stay reactive rather than purely memorize a fixed rhythm.
+**Hazards notice proximity.** `checkHazardAlerts()` runs every frame: a hazard within `alertRadius()` - which since round 3 scales with the player's own reach, see "The reach drives being noticed" below - of the wisp for even one frame flips into an "alert" state - its *currently running* patrol tween gets `timeScale = ALERT_TIME_SCALE` (faster playback of the same eased path, not a different path) and its light's intensity rises from `CALM_LIGHT_INTENSITY` toward `ALERT_LIGHT_INTENSITY` as a fair telegraph. `patrol()` now stores the live tween on the hazard object (`hazard.tween`) specifically so this can reach in and adjust it; the last line of `patrol()` re-applies the current alert `timeScale` to a freshly created next-leg tween, so the boost doesn't silently reset to calm at a waypoint if the player is still close. The patrol *shape* stays exactly as seeded and fully deterministic for a fixed play - only pace and visibility change - so builds stay comparable in judging the way "Deterministic layout" below already requires, while a returning player still has to stay reactive rather than purely memorize a fixed rhythm.
 
-`fail()` is the cost: it snuffs the wisp's light (a hard tween down, not a fade), plays a burst of filtered noise plus a falling dissonant interval, then - after a beat - resets the *level's* progress: position back to the start, `collected` back to 0, every mote respawned, the beacon dark again. It does not reset which level you are on or send you back to level 1; only this attempt's progress is lost, which is what makes avoiding a hazard worth doing without making one mistake cost the whole run. `resets` accumulates across the whole playthrough and is the only number `EndingScene` reports back.
+`fail()` is the cost, and since round 3 what it takes is your light, not your work: it snuffs the wisp's light (a hard tween down, not a fade), darkens the screen with `deathVeil` rather than flashing it, plays a burst of filtered noise plus a falling dissonant interval, and then - after a beat - returns the wisp to the level's start and drops the reach to `REACH_MIN`.
+The motes stay where they are and `collected` is untouched, so a death late in a level means finishing it nearly blind, walking back across ground you had already lit, and only collecting brings the reach back.
+The earlier version wiped the level's progress and restarted it; that punished the one thing this round wants the player doing, going near a shadow to reach past it, and twenty seconds into a judging session it is the moment a player puts the game down.
+Loss now speaks the same currency as the press, so the game has one number that gaining, spending and dying all move.
+It does not reset which level you are on. `resets` accumulates across the whole playthrough and is the only number `EndingScene` reports back.
 
 ## A `this.time.delayedCall` gotcha
 
@@ -83,37 +88,12 @@ Shadow-wisps - the thing the light is not. `makeHazardTexture` draws an irregula
 
 ## Menu-to-level transition cost is real, and it isn't the textures
 
-Clicking through from the menu to level 1 takes close to two seconds
-(measured locally, quiet host, three runs: ~1.9-2.0s from click to
-`window.__glow.scene === "level"`) - long enough that it can read as a
-stall rather than a fade. The obvious suspect is `LevelScene.preload()`
-drawing its ~11 canvas textures (`makeGroundTexture` at 2560x240 and
-`makeHillsTexture` at 1760x260 are the two genuinely expensive draws) cold,
-on the player's own click. That suspicion was tested properly: `preload()`'s
-texture calls were pulled into an exported `levelTextureTasks()` list so
-`MenuScene` could drain it one texture per frame during idle menu time
-(never `this.time.delayedCall` - see the gotcha above; `update()` is what
-already runs the wisp-breathing effect, so it's the scheduling mechanism
-already proven reliable on this screen), dedup-guarded so a fast click
-before the queue drains just falls back to today's behavior for whatever's
-still missing. Measured **with the full prewarm confirmed drained
-before clicking**: 1.89-1.95s. Measured cold, same host, same conditions:
-1.93-2.02s. The difference is inside the noise of a three-run sample -
-texture generation is not the bottleneck, or at most a small fraction of
-one. (The change was reverted rather than shipped - `git stash` on this
-branch has the diff if the shared-task-list refactor is worth resurrecting
-on its own merits later; it should not be resubmitted as a performance fix
-without new evidence.)
+Clicking through from the menu to level 1 takes close to two seconds (measured locally, quiet host, three runs: ~1.9-2.0s from click to `window.__glow.scene === "level"`), long enough that it can read as a stall rather than a fade.
+The obvious suspect - `LevelScene.preload()` drawing its ~11 canvas textures cold on the player's own click - was tested and cleared: draining the texture list one per frame during idle menu time measured 1.89-1.95s against 1.93-2.02s cold, a difference inside the noise of a three-run sample.
+That prewarm was not shipped.
 
-What's actually eating the time is more likely `LevelScene.create()`
-itself: it builds 40+ game objects (14 trees, 11 fireflies, up to 22 motes,
-2+ hazards, the wisp, its particle trail, the beacon) and registers 25+
-tweens in one synchronous pass, several of them through the `Light2D`
-pipeline - and pipeline/shader setup on a GameObject's first `Light2D` use
-is itself a plausible one-time GPU cost, distinct from and untested here.
-Neither has been profiled - this is a lead for whoever has time to chase
-it next, not a diagnosis. Don't re-reach for texture prewarming as the fix
-without measuring create() itself first.
+The likelier cost is `LevelScene.create()` itself: it builds 40+ game objects (14 trees, 11 fireflies, up to 22 motes, 2+ hazards, the wisp, its particle trail, the beacon) and registers 25+ tweens in one synchronous pass, several of them through the `Light2D` pipeline, whose first use per object is its own one-time GPU cost.
+Neither has been profiled - this is a lead, not a diagnosis. Do not reach for texture prewarming again without measuring `create()` first.
 
 ## How the scene works (LevelScene specifics)
 
@@ -127,7 +107,10 @@ without measuring create() itself first.
 - **Input.** Pointer move and pointer down set a target the wisp eases toward; arrows and WASD move the same target. Both are ignored while `this.locked` is true (mid-fail, mid-level-complete) so the player cannot interrupt either transition. Touch uses the pointer-down path and requires no separate mechanic button.
 - **Movement is speed-capped, identically for both input methods.** `update()` eases the wisp toward `target` (the trailing, gliding feel), then clamps the *actual per-frame displacement* to `WISP_MAX_SPEED` (480px/s). This matters because pointer input sets `target` straight to the cursor's world position with no distance limit of its own - unclamped, the exponential ease covers more ground the farther the target is, so a single mouse flick could out-run the keyboard's own step-based cap by a wide margin. Clamping the *displacement* rather than the target preserves the eased feel for ordinary small movements (almost always already under the cap) and only reins in the extreme case. `WISP_MAX_SPEED` was raised from keyboard's original 347 to 480 after capping mouse input to 347 made ordinary repositioning feel sluggish, not just hazard-avoidance fair - see `tests/smoke.spec.ts`'s mote-collection test for the corresponding timing update (a full-viewport sweep now takes several real seconds, not the near-instant catch-up unbounded mouse input used to allow).
 - **Storm weather (level 3 only).** `buildStorm()` gives storm-dark a real identity beyond its palette: wind-blown flecks drifting left across the near field (an additive particle layer at `scrollFactor 0.9`), plus a seeded flicker schedule that double-flashes a screen-space wash sitting *between* the sky and the hills (depth -90: distant lightning behind the ridge, never over the playfield) with a soft low-passed thunder swell (`Ambience.rumble()`). The wind bed itself is `Ambience.setStorm(on)` - looping filtered noise with a slow gust LFO, faded in by `LevelScene.create()` on storm-dark and back out otherwise (and by the ending); it is built lazily and deferred until `unlock()` if requested before audio exists, and turning it off zeroes the LFO depth too so "off" is silent rather than oscillating around zero.
-- **Test hook.** `reportState()` publishes `window.__glow` (scene/progression, visible positions, plus the visible `chain`, its remaining boundary, released-wave count, and slowed-hazard count) and each scene's `create()` sets `document.body.dataset.gameReady` after its first rendered frame. The smoke tests drive real input through the menu and level; `scripts/play-gate.mjs` steers full playthroughs by the same telemetry (positions and state a sighted player already has on screen). If the shape changes, keep `src/global.d.ts` in sync.
+- **The reach (round 3's verb).** The wisp's lit radius and its pull radius are the same number, `reach`, and that is the whole rule - there is nothing to read, because you can see exactly as far as you can reach. A press (click, tap or Space) draws every mote inside the circle to the wisp, nearest first, at most `GATHER_MAX_MOTES` (4) per press with the overflow put straight back on the ground. The press costs `GATHER_COST` (170) off the reach whether or not it catches anything, each mote taken - by reaching or by walking into it - returns `REACH_PER_MOTE` (32), and the reach is clamped to [`REACH_MIN` 170, `REACH_MAX` 470] so a bad run of presses leaves you small but never stuck. A full armful still returns less than the press cost, so the reach is what you spend light on to take a mote you could not safely walk to; walking into motes is what makes you bright again. `GATHER_COOLDOWN_MS` (420) is a double-press guard, not a paced ability cooldown - the intended cost is the shrinking circle. `gatherWave()` draws the collapsing ring so the press has a shape, and level 1 fades in one `reachLine` hint that destroys itself on the first press (`taught` rides forward in the scene data so it is taught once per run).
+- **The reach drives being noticed, not being hunted.** `alertRadius()` is `reach * ALERT_RADIUS_PER_REACH` (0.6) clamped to [`ALERT_RADIUS_FLOOR`, `ALERT_RADIUS_CEILING` 290]: a wisp burning at full reach wakes the glade from a long way off, one that just spent itself on a pull goes nearly unseen. Only the noticing scales with the reach; the chase speed ramps in from the fixed floor, so a big light is seen sooner, not chased faster. The two were coupled at first, and it killed the wrong player: someone who had not yet found the press kept a full reach and was therefore permanently at maximum chase speed. Splitting them took the cautious replay persona from two deaths in sixteen seconds to forty-five clean seconds, while greedy still dies seven times.
+- **The reach has no HUD line.** It is the only number in the game and it is told in the light itself: the trail thins as the reach falls, the wisp dims, and below a third of the range it gutters - a fast shallow flicker over the slow breath, so "nearly spent" is visible before it is a problem.
+- **Test hook.** `reportState()` publishes `window.__glow` (scene/progression, visible positions, plus the visible `chain`, its remaining boundary, released-wave count, and slowed-hazard count) and each scene's `create()` sets `document.body.dataset.gameReady` after its first rendered frame. Round 3 added `reach` (the lit radius, which is also the pull radius) and `gathers` (presses this level attempt). The smoke tests and the replay personas drive real input through the menu and level and read nothing a sighted player does not already have on screen. If the shape changes, keep `src/global.d.ts` in sync.
 
 ## Replay harness
 
@@ -153,7 +136,7 @@ The queue replaced a single host-wide `flock` on 2026-08-29. The mutex was corre
 
 Against a build that predates this runtime - a contestant slot that has not merged the base yet - the driver falls back to **compat mode**: real Playwright input, wall-clock frames, no audio, and `mode: "compat"` in every output. Useful for looking at a rival build, useless for comparing timings.
 
-**Personas (`replay/personas/`).** `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only` - a seed, an input device, and phases (`wait`, `start`, `idle`, `collect` with a hazard-safety distance). The `collect` phase steers by `window.__glow`, the same positions a sighted player has on screen. They are bots with perfect information, so they play faster and cleaner than a person: read them as a probe that the game answers input, makes sound and stays alive, not as a skill benchmark. Contestants may add personas; the five shipped ones must keep passing.
+**Personas (`replay/personas/`).** `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only`, `reacher` - a seed, an input device, and phases (`wait`, `start`, `idle`, `collect` with a hazard-safety distance, `gather` for the reach). `reacher` is round 3's persona: it presses the reach whenever motes are inside the lit circle, which is how the gate sees a press that costs light and catches nothing. The `collect` and `gather` phases steer by `window.__glow`, the same positions a sighted player has on screen. They are bots with perfect information, so they play faster and cleaner than a person: read them as a probe that the game answers input, makes sound and stays alive, not as a skill benchmark. Contestants may add personas; the five shipped ones must keep passing.
 
 ## Fixed resolution
 

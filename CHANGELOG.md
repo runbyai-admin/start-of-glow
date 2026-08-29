@@ -2,6 +2,38 @@
 
 One entry per round, written by that round's winner as part of banking the win: what changed and why, in enough detail that the other two contestants can pick it up tomorrow.
 
+## Round 3 - Claude (the reach, 2026-08-29)
+
+The round's brief was mechanics and nothing else: one clear thing you do with the light, good in the hands inside ten seconds, no new menus or modes.
+This entry gives the game a verb and makes every other system speak it.
+
+**The reach.** The wisp's lit radius is also its pull radius - one number, `reach`, and the circle you can see is the rule.
+Press (click, tap or Space) and every mote inside it comes to you, nearest first, four at most per press with the overflow left on the ground.
+The press costs 170 off the reach whether it catches anything or not; each mote taken, pulled or walked into, returns 32; the reach is clamped to [170, 470].
+A full armful returns less than the press cost, so pulling is what you spend light on to take a mote you could not safely walk to, and walking into motes is how you get bright again.
+There is no HUD line for it: the trail thins, the wisp dims, and under a third of the range it gutters.
+
+**Being noticed scales with the light, being hunted does not.** A shadow notices as far as the light carries (`alertRadius` = 0.6 x reach, capped at 290) and its own glow comes up so the state is readable across the glade, but the chase speed ramps in from a fixed floor.
+Coupling the two killed the wrong player - someone who had not found the press kept a full reach and was permanently at top chase speed. The split took the cautious persona from two deaths in sixteen seconds to forty-five clean ones, with greedy still dying seven times.
+
+**A shadow takes your light, not your work.** Death used to wipe the level's motes and restart it, which twenty seconds into a judging session is where a player puts the game down, and it punished exactly the behaviour the round wanted: going near a shadow to reach past it.
+Now the motes stay, the reach drops to its floor, and the sting is finishing the level nearly blind over ground you had already lit. Loss, gain and spend all move the same number.
+
+**Feel pass on the same verb.** The press draws a collapsing ring rather than washing the screen; death goes dark through a veil instead of flashing the screen on; the level arrival is a swell rather than a switch; the spawn scale is derived from the reach instead of a hand-set 0.5; the `shadows slowed` readout fades after a beat instead of sitting in the corner for the chain's full four seconds; and the level-1 hint that names the verb destroys itself on the first press.
+
+Added `replay/personas/reacher.json`, which presses whenever motes are inside the circle - the persona that makes a press costing light and catching nothing visible to `npm test`.
+
+### What else was tried
+
+**OpenAI - the surge.** Light became a movement verb: a short aimed dash with a refill ring, a rising synth voice and displacement-led stretch.
+Surging through a shadow spent the dash to slow it for 2.2 seconds; touching one without the timing still snuffed you. Collection gained magnetism and a chain-driven speed lift.
+Two focused probes are worth keeping in mind for anyone building on this tree: a wall-clock dash window let a clamped game delta move the wisp only 27px on a slow host (distance now owns completion), and endpoint-only collision sampling let a low-frame-rate dash tunnel clean through a shadow (contact sweeps relative motion instead).
+The owner could not tell what mechanic the build had added, and judged it as the previous champion.
+
+**Grok - the forest as the HUD.** A thread pointing at the next mote, an open beacon that tows the player toward it like a tide, a gather lunge on click, camera breathing per gather, sparks shed from the haul while it orbits, a chain that warms the afterglow, and a snuff that no longer freezes the forest.
+The mechanics read well; the presentation around them did not hold up, and the owner stopped playing on roughness rather than on the mechanic.
+It shipped no changelog entry of its own.
+
 ## Round 2 - OpenAI candidate (playable menu + lumen chain, 2026-08-26)
 
 Round 1's owner feedback was unusually specific: OpenAI was the close loser and generally stronger, but collecting light—the most repeated action—lacked weight, and its sound missed the mood. This candidate starts from Claude's canonical winner and answers that gap without discarding its three-level optional/flawless route.

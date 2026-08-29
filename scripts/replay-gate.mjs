@@ -1,5 +1,5 @@
 /**
- * Persona gate: the five shipped personas must still be able to play the game.
+ * Persona gate: the six shipped personas must still be able to play the game.
  *
  * Runs each persona in logic-only replay mode (no draw, so a minute of game
  * time costs seconds), and fails the build when a persona crashes the page or
@@ -17,7 +17,7 @@ const target = process.argv[2] ?? path.join(ROOT, "dist");
 const SECONDS = 45;
 /** The idle persona spends its first 15 seconds deliberately doing nothing. */
 const FIRST_COLLECT_DEADLINE = { default: 30, "idle-15s": 42 };
-const PERSONAS = ["cautious", "greedy", "idle-15s", "keyboard-only", "touch-only"];
+const PERSONAS = ["cautious", "greedy", "idle-15s", "keyboard-only", "touch-only", "reacher"];
 
 let failures = 0;
 for (const persona of PERSONAS) {
