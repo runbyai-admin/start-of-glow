@@ -140,6 +140,7 @@ export class LevelScene extends Phaser.Scene {
   private lastShakeAt = 0;
   private gutter = 0;
   private deathVeil!: Phaser.GameObjects.Rectangle;
+  private arrivalVeil!: Phaser.GameObjects.Rectangle;
   private inviteShown = 0;
   private incoming: Phaser.GameObjects.Image[] = [];
 
@@ -559,6 +560,13 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setAlpha(0)
       .setDepth(94);
+
+    this.arrivalVeil = this.add
+      .rectangle(width / 2, height / 2, width, height, 0xffe8c0)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setDepth(93)
+      .setBlendMode(Phaser.BlendModes.ADD);
   }
 
   /**
@@ -1191,7 +1199,37 @@ export class LevelScene extends Phaser.Scene {
     const wasFlawless = this.collected >= this.totalMotes;
     const flawless = this.flawlessLevels + (wasFlawless ? 1 : 0);
     this.ambience.levelComplete(wasFlawless);
-    this.cameras.main.flash(170, 255, 232, 190);
+    // The arrival is a swell, not a switch. A camera flash paints the frame
+    // solid at full alpha before it fades, so the one frame in three that a
+    // contact sheet catches of this game's best moment was a cream rectangle -
+    // the same fault as the old radiance flash and the old death flash. An
+    // additive veil to 0.42 and a beacon that blooms says "you made it" while
+    // the forest is still visible behind it.
+    this.tweens.killTweensOf(this.arrivalVeil);
+    this.arrivalVeil.setAlpha(0);
+    this.tweens.add({
+      targets: this.arrivalVeil,
+      alpha: { from: 0, to: 0.42 },
+      duration: 200,
+      yoyo: true,
+      hold: 90,
+      ease: "Sine.easeOut",
+    });
+    // beaconPulse() leaves an infinite yoyo running on the same property.
+    this.tweens.killTweensOf(this.beacon);
+    this.tweens.add({
+      targets: this.beacon,
+      scale: { from: this.beacon.scale, to: this.beacon.scale * 1.8 },
+      duration: 520,
+      ease: "Cubic.easeOut",
+    });
+    this.tweens.add({
+      targets: this.beaconLight,
+      intensity: 3.4,
+      radius: 520,
+      duration: 420,
+      ease: "Cubic.easeOut",
+    });
     this.cameras.main.fadeOut(520, 8, 7, 14);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const next = this.config.index + 1;
