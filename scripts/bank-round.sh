@@ -3,11 +3,16 @@
 # publish the champion build.
 #
 #   scripts/bank-round.sh <round> <claude|openai|grok> --verdict "one line"
+#   scripts/bank-round.sh <round> <claude|openai|grok> --verdict-file verdict.json
 #
 # Run it from the owner's canonical clone after judging. It refuses rather than
-# repairs: a winner that did not update ARCHITECTURE.md and CHANGELOG.md is not
-# merged, because publishing your understanding of the codebase is the price of
-# banking the win (RULES.md, "Banking the win").
+# repairs: a branch that is not built on the round's base, or a merged tree that
+# fails the gate, is not banked.
+#
+# Banking tags the merge as round-N-winner and stops there. round-(N+1)-base is
+# tagged by scripts/consolidate-round.sh, which prunes the tree and rewrites the
+# docs before the next round starts from it - that pass is the reason the
+# contestants no longer owe ARCHITECTURE.md and CHANGELOG.md for a win.
 #
 # Flags and environment:
 #   --dry-run     run every check and the merge locally, then undo it - no
@@ -17,6 +22,7 @@
 #   WINNER_REF    the ref to merge (default <winner>/main)
 set -euo pipefail
 
+ORIG_PWD="$PWD"
 cd "$(dirname "$0")/.."
 
 ROUND="${1:-}"
@@ -24,11 +30,13 @@ WINNER="${2:-}"
 shift 2 2>/dev/null || true
 
 VERDICT=""
+VERDICT_FILE=""
 DRY_RUN=0
 RUN_TESTS=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --verdict) VERDICT="${2:-}"; shift 2 ;;
+    --verdict-file) VERDICT_FILE="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --no-tests) RUN_TESTS=0; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -37,12 +45,21 @@ done
 
 case "$ROUND" in ''|*[!0-9]*) echo "usage: scripts/bank-round.sh <round> <claude|openai|grok> --verdict \"...\"" >&2; exit 2 ;; esac
 case "$WINNER" in claude|openai|grok) ;; *) echo "winner must be claude, openai or grok" >&2; exit 2 ;; esac
-[ -n "$VERDICT" ] || { echo "--verdict is required: one line on why this build won" >&2; exit 2; }
+if [ -n "$VERDICT_FILE" ]; then
+  # The script runs from the repo root, so a path the owner typed elsewhere
+  # has to be resolved against the directory they typed it in.
+  case "$VERDICT_FILE" in /*) ;; *) VERDICT_FILE="$ORIG_PWD/$VERDICT_FILE" ;; esac
+  [ -f "$VERDICT_FILE" ] || { echo "no verdict file at $VERDICT_FILE" >&2; exit 2; }
+  # Validates the whole file (four fields for every build) and hands back the
+  # winner line, so a half-written verdict refuses before anything is merged.
+  FILE_VERDICT=$(node scripts/ledger.mjs verdict-check --file "$VERDICT_FILE" --print verdict)
+  [ -n "$VERDICT" ] || VERDICT="$FILE_VERDICT"
+fi
+[ -n "$VERDICT" ] || { echo "--verdict or --verdict-file is required: one line on why this build won" >&2; exit 2; }
 
 NEXT=$((ROUND + 1))
 BASE_TAG="round-$ROUND-base"
 WIN_TAG="round-$ROUND-winner"
-NEXT_TAG="round-$NEXT-base"
 REF="${WINNER_REF:-$WINNER/main}"
 
 refuse() { echo "REFUSED: $*" >&2; exit 1; }
@@ -68,13 +85,6 @@ git rev-parse -q --verify "$REF" >/dev/null || refuse "$REF not found"
 git merge-base --is-ancestor "$BASE_TAG^{commit}" "$REF" \
   || refuse "$REF does not build on $BASE_TAG - the round is judged from the shared base"
 
-echo "==> banking-the-win check"
-CHANGED=$(git diff --name-only "$BASE_TAG^{commit}" "$REF")
-grep -qx 'ARCHITECTURE.md' <<<"$CHANGED" || refuse "$REF does not update ARCHITECTURE.md - a win with a stale architecture doc is not banked"
-grep -qx 'CHANGELOG.md' <<<"$CHANGED" || refuse "$REF has no CHANGELOG.md entry for the round"
-git show "$REF:CHANGELOG.md" | grep -qiE "^## +round +$ROUND\b" \
-  || refuse "CHANGELOG.md has no '## Round $ROUND' entry"
-
 echo "==> merge $REF -> main"
 SAFETY=$(git rev-parse HEAD)
 undo() { git merge --abort 2>/dev/null || true; git reset --hard --quiet "$SAFETY"; }
@@ -98,16 +108,16 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 echo "==> ledger"
-node scripts/ledger.mjs record-round --round "$ROUND" --winner "$WINNER" --verdict "$VERDICT" --commit "$MERGE_SHA"
+node scripts/ledger.mjs record-round --round "$ROUND" --winner "$WINNER" --verdict "$VERDICT" --commit "$MERGE_SHA" \
+  ${VERDICT_FILE:+--verdict-file "$VERDICT_FILE"}
 git add ledger.json LEDGER.md
 git commit --quiet -m "[round-$ROUND] ledger: $WINNER banks the win" -- ledger.json LEDGER.md
 
 echo "==> tag"
 git tag -a "$WIN_TAG" "$MERGE_SHA" -m "Round $ROUND winner: $WINNER - $VERDICT"
-git tag -a "$NEXT_TAG" -m "Base for round $NEXT"
 
 echo "==> push"
-git push --quiet origin main "$WIN_TAG" "$NEXT_TAG"
+git push --quiet origin main "$WIN_TAG"
 
 if [ "${SKIP_DEPLOY:-0}" = 1 ]; then
   echo "SKIP_DEPLOY=1 - /glow/ not republished"
@@ -122,6 +132,8 @@ cat <<EOF
 Round $ROUND banked.
   winner   $WINNER ($REF)
   merge    ${MERGE_SHA:0:7}
-  tags     $WIN_TAG (the winning merge), $NEXT_TAG (where round $NEXT starts)
-  next     open round $NEXT: runbyai repo, ops/open-round.sh $NEXT
+  tag      $WIN_TAG (the winning merge)
+  next     consolidate: scripts/consolidate-round.sh $ROUND
+           it prunes the tree, rewrites ARCHITECTURE.md and CHANGELOG.md, and
+           tags round-$NEXT-base. Round $NEXT cannot open until it has run.
 EOF

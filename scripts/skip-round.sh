@@ -2,6 +2,7 @@
 # Close a round nobody won: record it, and tag where tomorrow starts.
 #
 #   scripts/skip-round.sh <round> --verdict "why nobody won" [--dry-run]
+#   scripts/skip-round.sh <round> --verdict-file verdict.json [--dry-run]
 #
 # There is no merge to bank, but the next round still needs a base tag, and the
 # ledger still needs the round on the record - a round nobody won is a result,
@@ -10,23 +11,32 @@
 # ledger commit).
 set -euo pipefail
 
+ORIG_PWD="$PWD"
 cd "$(dirname "$0")/.."
 
 ROUND="${1:-}"
 shift 1 2>/dev/null || true
 
 VERDICT=""
+VERDICT_FILE=""
 DRY_RUN=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --verdict) VERDICT="${2:-}"; shift 2 ;;
+    --verdict-file) VERDICT_FILE="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 case "$ROUND" in ''|*[!0-9]*) echo "usage: scripts/skip-round.sh <round> --verdict \"...\"" >&2; exit 2 ;; esac
-[ -n "$VERDICT" ] || { echo "--verdict is required: one line on why the round went unwon" >&2; exit 2; }
+if [ -n "$VERDICT_FILE" ]; then
+  case "$VERDICT_FILE" in /*) ;; *) VERDICT_FILE="$ORIG_PWD/$VERDICT_FILE" ;; esac
+  [ -f "$VERDICT_FILE" ] || { echo "no verdict file at $VERDICT_FILE" >&2; exit 2; }
+  FILE_VERDICT=$(node scripts/ledger.mjs verdict-check --file "$VERDICT_FILE" --print verdict)
+  [ -n "$VERDICT" ] || VERDICT="$FILE_VERDICT"
+fi
+[ -n "$VERDICT" ] || { echo "--verdict or --verdict-file is required: one line on why the round went unwon" >&2; exit 2; }
 
 NEXT=$((ROUND + 1))
 BASE_TAG="round-$ROUND-base"
@@ -48,14 +58,16 @@ git rev-parse -q --verify "refs/tags/$BASE_TAG" >/dev/null || refuse "$BASE_TAG 
   || refuse "main is not at $BASE_TAG - canonical moved since the round opened"
 
 if [ "$DRY_RUN" = 1 ]; then
-  node scripts/ledger.mjs record-round --round "$ROUND" --winner none --verdict "$VERDICT"
+  node scripts/ledger.mjs record-round --round "$ROUND" --winner none --verdict "$VERDICT" \
+    ${VERDICT_FILE:+--verdict-file "$VERDICT_FILE"}
   git checkout --quiet -- ledger.json LEDGER.md
   echo "dry run ok: round $ROUND would be recorded unwon and $NEXT_TAG tagged at $(git rev-parse --short main) (nothing was written)"
   exit 0
 fi
 
 echo "==> ledger"
-node scripts/ledger.mjs record-round --round "$ROUND" --winner none --verdict "$VERDICT"
+node scripts/ledger.mjs record-round --round "$ROUND" --winner none --verdict "$VERDICT" \
+  ${VERDICT_FILE:+--verdict-file "$VERDICT_FILE"}
 git add ledger.json LEDGER.md
 git commit --quiet -m "[round-$ROUND] no winner: $VERDICT" -- ledger.json LEDGER.md
 

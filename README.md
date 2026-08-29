@@ -95,10 +95,10 @@ Each carries a single write **deploy key**, held by that contestant alone: every
 That is the point - the round is judged on what each contestant deployed, so nothing else may be able to move it.
 
 ```
-canonical main ──● round-1-base ─────────────────● round-1-winner / round-2-base ──● …
-                  ├─ claude repo  (round 1)      │
-                  ├─ openai repo  (round 1)  ────┘  winner merges, everyone resets
-                  └─ grok repo    (round 1)
+canonical main ──● round-1-base ─────────────────● round-1-winner ──● round-2-base ──● …
+                  ├─ claude repo  (round 1)      │                    │
+                  ├─ openai repo  (round 1)  ────┘                    └─ consolidation pass
+                  └─ grok repo    (round 1)         winner merges        (prune, retest, docs)
 ```
 
 **Setup, once:**
@@ -125,19 +125,29 @@ git push --force-with-lease origin main
 
 Force-pushing your **own** `main` is expected: your repo restarts from the base every round, and its history is a scratchpad. Canonical is never force-pushed.
 
-- The owner judges, merges the winning repo into canonical `main`, and tags that commit twice: `round-N-winner` (what won) and `round-(N+1)-base` (where everyone starts tomorrow).
-- Banking a win costs the winner an update to `ARCHITECTURE.md` and a `CHANGELOG.md` entry explaining what changed and why. The merge is refused without them - publishing your understanding of the codebase is the price of the win.
+- The owner judges, merges the winning repo into canonical `main`, and tags that commit `round-N-winner`.
+- A win costs the winner nothing in documentation: `npm run check && npm test` green and a play narrative on the round ticket is the whole gate. `ARCHITECTURE.md` and `CHANGELOG.md` are written by the owner-side consolidation pass after the merge, which is also what tags `round-(N+1)-base`.
 - Read the previous winner's diff and `ARCHITECTURE.md` at the start of your round. That is how the losing contestants catch up.
 
 The merge is one command, run by the owner from a canonical clone:
 
 ```sh
 scripts/bank-round.sh 3 claude --verdict "the dash finally has weight"
+scripts/bank-round.sh 3 claude --verdict-file verdict.json   # the structured verdict from judging
 ```
 
-It refuses to merge a branch that did not update `ARCHITECTURE.md` and add a `## Round N` changelog entry, refuses a branch that is not built on `round-N-base`, and refuses anything that fails `npm run check` or the smoke tests - undoing its own merge in every case.
-What survives all of that is merged, recorded in `ledger.json`, tagged `round-N-winner` and `round-(N+1)-base`, pushed, and published to `/glow/`.
+It refuses a branch that is not built on `round-N-base` and anything that fails `npm run check` or the smoke tests, undoing its own merge in every case.
+What survives is merged, recorded in `ledger.json`, tagged `round-N-winner`, pushed, and published to `/glow/`.
 `--dry-run` performs every check and the merge and then undoes it, which is how you test a round without banking it.
+
+Then the consolidation pass, run by the owner in a neutral operator session on canonical `main` - prune the tree, keep the suite green, rewrite `ARCHITECTURE.md`, write the round's `CHANGELOG.md` entry with what the two losing forks tried:
+
+```sh
+scripts/consolidate-round.sh 3 --losers     # what the two losers changed and wrote
+scripts/consolidate-round.sh 3              # gate, commit, tag round-4-base, push
+```
+
+It refuses until the docs are actually rewritten, and `round-4-base` exists only once it has run - so no round ever opens on a tree whose docs describe a different codebase.
 
 A round can also end with no winner. There is nothing to merge then, but the round is still recorded and the next base still has to exist:
 

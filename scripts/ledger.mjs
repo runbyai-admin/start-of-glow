@@ -9,7 +9,8 @@
  *   node scripts/ledger.mjs status                print the standings
  *   node scripts/ledger.mjs render                rewrite LEDGER.md
  *   node scripts/ledger.mjs record-round --round 1 --winner claude \
- *        --verdict "..." --commit <sha> [--date YYYY-MM-DD]
+ *        --verdict "..." --commit <sha> [--date YYYY-MM-DD] [--verdict-file v.json]
+ *   node scripts/ledger.mjs verdict-check --file v.json [--print verdict|winner|video]
  *   node scripts/ledger.mjs tip --provider claude --note "..." [--date YYYY-MM-DD]
  *
  * The git side of a round - commit, tags, push - belongs to scripts/bank-round.sh
@@ -32,6 +33,14 @@ const PROVIDERS = ["claude", "openai", "grok"];
 const tipCost = (n) => n + 2;
 const LABEL = { claude: "Claude", openai: "OpenAI", grok: "Grok" };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** The four fields the owner fills in per build while judging (RULES.md, "Judging"). */
+const VERDICT_FIELDS = ["did", "stopped", "keep", "kill"];
+const FIELD_LABEL = {
+  did: "First two minutes",
+  stopped: "Where I stopped",
+  keep: "Keep",
+  kill: "Kill",
+};
 
 function die(msg) {
   console.error(`ledger: ${msg}`);
@@ -60,6 +69,67 @@ function save(data) {
   writeFileSync(DATA, `${JSON.stringify(data, null, 2)}\n`);
 }
 
+/**
+ * Problems with a structured verdict: every provider, every field, non-empty.
+ * The four fields are the owner's own words from the judging session, and a
+ * build the owner did not write up is a build that was not judged - so a
+ * partial verdict is a bug in the judging, not a shape the ledger accepts.
+ */
+function verdictProblems(builds, at) {
+  const problems = [];
+  if (!builds || typeof builds !== "object" || Array.isArray(builds)) {
+    return [`${at} must be an object keyed by provider`];
+  }
+  for (const key of Object.keys(builds)) {
+    if (!PROVIDERS.includes(key)) problems.push(`${at}.${key} is not a provider`);
+  }
+  for (const p of PROVIDERS) {
+    const b = builds[p];
+    if (!b || typeof b !== "object") {
+      problems.push(`${at}.${p} is missing`);
+      continue;
+    }
+    for (const f of VERDICT_FIELDS) {
+      if (typeof b[f] !== "string" || !b[f].trim()) problems.push(`${at}.${p}.${f} is required`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Read a verdict file: the winner line, the optional judging video, and the
+ * four fields per build. Written by the owner during judging and passed to
+ * bank-round.sh / skip-round.sh / close-round.sh, so all three say the same
+ * thing without the owner retyping it.
+ */
+function readVerdictFile(path) {
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    die(`cannot read verdict file ${path}`);
+  }
+  let v;
+  try {
+    v = JSON.parse(raw);
+  } catch (err) {
+    die(`${path} is not valid JSON: ${err.message}`);
+  }
+  const problems = [];
+  if (typeof v.verdict !== "string" || !v.verdict.trim()) problems.push("verdict is required - the one line the video uses");
+  if (v.video !== undefined && !/^https?:\/\/\S+$/.test(v.video ?? "")) problems.push("video must be a URL");
+  if (v.winner !== undefined && v.winner !== "none" && v.winner !== null && !PROVIDERS.includes(v.winner)) {
+    problems.push(`winner must be ${PROVIDERS.join("|")}|none`);
+  }
+  problems.push(...verdictProblems(v.builds, "builds"));
+  if (problems.length) {
+    console.error(`${path} is not a valid verdict file:`);
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
+  return v;
+}
+
 /** Validate the record and return the derived standings, or exit non-zero. */
 function derive(data) {
   const problems = [];
@@ -78,6 +148,10 @@ function derive(data) {
     if (r.winner && !/^[0-9a-f]{7,40}$/.test(r.commit ?? "")) {
       problems.push(`${at}.commit must be the merge commit sha`);
     }
+    if (r.video !== undefined && !/^https?:\/\/\S+$/.test(r.video ?? "")) {
+      problems.push(`${at}.video must be a URL`);
+    }
+    if (r.builds !== undefined) problems.push(...verdictProblems(r.builds, `${at}.builds`));
   }
 
   const rounds = [...data.rounds].sort((a, b) => a.round - b.round);
@@ -127,6 +201,9 @@ function ranked(stand) {
   );
 }
 
+/** A markdown table cell: pipes escaped, newlines flattened. */
+const cell = (v) => String(v ?? "").replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|");
+
 function render(data) {
   const { rounds, tips, stand } = derive(data);
   const out = [];
@@ -154,12 +231,41 @@ function render(data) {
   if (!rounds.length) {
     out.push("No round has been judged yet.");
   } else {
-    out.push("| Round | Date | Winner | Verdict | Merged |");
-    out.push("|------:|------|--------|---------|--------|");
+    out.push("| Round | Date | Winner | Verdict | Merged | Video |");
+    out.push("|------:|------|--------|---------|--------|-------|");
     for (const r of rounds) {
       const winner = r.winner ? LABEL[r.winner] : "no round";
       const merged = r.commit ? `\`${r.commit.slice(0, 7)}\` \`round-${r.round}-winner\`` : "-";
-      out.push(`| ${r.round} | ${r.date} | ${winner} | ${r.verdict.replace(/\|/g, "\\|")} | ${merged} |`);
+      const video = r.video ? `[judging](${r.video})` : "-";
+      out.push(`| ${r.round} | ${r.date} | ${winner} | ${cell(r.verdict)} | ${merged} | ${video} |`);
+    }
+  }
+
+  const judged = rounds.filter((r) => r.builds);
+  if (judged.length) {
+    out.push("");
+    out.push("## Verdicts");
+    out.push("");
+    out.push(
+      "What the owner wrote down while playing each build: the first two minutes, where the play stopped, the one thing to keep and the one thing to remove. Every build's verdict is public, so a round you lost still tells you what won and why.",
+    );
+    for (const r of [...judged].reverse()) {
+      out.push("");
+      out.push(`### Round ${r.round} - ${r.winner ? LABEL[r.winner] : "no winner"} (${r.date})`);
+      out.push("");
+      out.push(`${r.verdict}`);
+      if (r.video) {
+        out.push("");
+        out.push(`[Judging session](${r.video})`);
+      }
+      out.push("");
+      out.push(`| Build | ${VERDICT_FIELDS.map((f) => FIELD_LABEL[f]).join(" | ")} |`);
+      out.push(`|-------|${VERDICT_FIELDS.map(() => "-------").join("|")}|`);
+      for (const p of PROVIDERS) {
+        const b = r.builds[p];
+        const mark = p === r.winner ? ` **(won)**` : "";
+        out.push(`| ${LABEL[p]}${mark} | ${VERDICT_FIELDS.map((f) => cell(b[f])).join(" | ")} |`);
+      }
     }
   }
   out.push("");
@@ -214,7 +320,9 @@ function recordRound(data, argv) {
   if (!Number.isInteger(round) || round < 1) die("--round must be a positive integer");
   const winner = f.winner === "none" ? null : f.winner;
   if (winner !== null && !PROVIDERS.includes(winner)) die(`--winner must be ${PROVIDERS.join("|")}|none`);
-  if (!f.verdict?.trim()) die("--verdict is required - one line on why this build won");
+  const file = f["verdict-file"] ? readVerdictFile(f["verdict-file"]) : null;
+  const verdict = (f.verdict ?? file?.verdict ?? "").trim();
+  if (!verdict) die("--verdict is required - one line on why this build won");
   if (winner && !f.commit) die("--commit is required for a round with a winner");
   if (data.rounds.some((r) => r.round === round)) die(`round ${round} is already recorded`);
 
@@ -222,8 +330,10 @@ function recordRound(data, argv) {
     round,
     date: f.date ?? today(),
     winner,
-    verdict: f.verdict.trim(),
+    verdict,
     ...(winner ? { commit: f.commit } : {}),
+    ...(file?.builds ? { builds: file.builds } : {}),
+    ...(f.video ?? file?.video ? { video: f.video ?? file.video } : {}),
   });
   const stand = render(data);
   save(data);
@@ -276,9 +386,24 @@ switch (cmd) {
   case "record-round":
     recordRound(data, rest);
     break;
+  case "verdict-check": {
+    const f = flags(rest);
+    if (!f.file) die("--file is required");
+    const v = readVerdictFile(f.file);
+    // --print <field> is how the shell scripts read the file back without
+    // parsing JSON themselves, so the file is validated exactly once.
+    if (f.print) {
+      if (!["verdict", "winner", "video"].includes(f.print)) die(`--print must be verdict, winner or video`);
+      const val = v[f.print];
+      if (val !== undefined && val !== null) console.log(val);
+      break;
+    }
+    console.log(`verdict file ok: ${v.verdict}${v.video ? ` (video ${v.video})` : ""}`);
+    break;
+  }
   case "tip":
     buyTip(data, rest);
     break;
   default:
-    die(`unknown command "${cmd}" (check | status | render | record-round | tip)`);
+    die(`unknown command "${cmd}" (check | status | render | record-round | verdict-check | tip)`);
 }

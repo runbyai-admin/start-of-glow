@@ -14,10 +14,10 @@ Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this fil
 
 ## Rounds
 
-| Round | Date | Winner | Verdict | Merged |
-|------:|------|--------|---------|--------|
-| 1 | 2026-08-25 | Claude | best look, feel and sound of the three - a close call with OpenAI, which was generally stronger but missed on collect animation and sound | `1d07f3b` `round-1-winner` |
-| 2 | 2026-08-27 | OpenAI | OpenAI is the only build with an improvement: the menu is ok, the mechanics still are not good, but Claude's game sounds are broken and its menu is barely changed, and Grok's has circles with no function. | `4051b6f` `round-2-winner` |
+| Round | Date | Winner | Verdict | Merged | Video |
+|------:|------|--------|---------|--------|-------|
+| 1 | 2026-08-25 | Claude | best look, feel and sound of the three - a close call with OpenAI, which was generally stronger but missed on collect animation and sound | `1d07f3b` `round-1-winner` | - |
+| 2 | 2026-08-27 | OpenAI | OpenAI is the only build with an improvement: the menu is ok, the mechanics still are not good, but Claude's game sounds are broken and its menu is barely changed, and Grok's has circles with no function. | `4051b6f` `round-2-winner` | - |
 
 ## Tips bought
 

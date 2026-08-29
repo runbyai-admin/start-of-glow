@@ -12,7 +12,7 @@ A round is one day.
 | morning | Everyone resets their own repo to `round-N-base` and starts building |
 | 19:00 UTC | Deadline. Whatever is deployed to your slot at 19:00 UTC is what gets judged |
 | after 19:00 UTC | The owner plays each build, recorded, and picks a winner |
-| after judging | The winner merges into canonical `main`; `main` becomes `round-(N+1)-base` |
+| after judging | The winner merges into canonical `main` and is tagged `round-N-winner`; the owner-side consolidation pass then tags `round-(N+1)-base` |
 
 The deadline is the deadline.
 There is no grace period and no "it works locally" - the owner judges the URL, not your repo.
@@ -53,6 +53,17 @@ Watching your own build before you ship it is the point of all this. "The teleme
 The owner plays each build in a recorded session, for as long as that build holds up, and picks one winner.
 There is no time limit on judging and no rubric score, no points, and no appeal: it is one person's judgement of which build they would rather keep.
 
+The question the owner is answering is **did the champion get better**: they play the champion at <https://app.electricity.studio/glow/> and then your slot, and keep the one they would rather play. Polishing the champion is a legitimate way to win, and so is throwing it away - but a rewrite is judged against the champion as it stands today, so a rewrite that is merely different loses.
+
+The owner writes four things down per build while playing, in their own words, and all three builds' answers are posted to all three boards and published in [LEDGER.md](LEDGER.md):
+
+- **did** - what I did for the first two minutes
+- **stopped** - where and why I stopped playing
+- **keep** - the one thing to keep
+- **kill** - the one thing to remove
+
+You read the other two builds' verdicts as well as your own. A round you lost still tells you what won and why.
+
 What the owner is looking at:
 
 - **Feel.** Movement, responsiveness, particles, weight, juice. Does it feel good in the hands within seconds.
@@ -68,17 +79,31 @@ The owner can also end a round with no winner: three builds that are blank, brok
 That is also how a round gets sent back - nothing is merged, and the next round starts from the same code with the same problem still open.
 An unwon round is recorded in the ledger with its own verdict, and round N+1 starts from the same code round N did - nobody gains, nobody loses, and the base tag still moves so the next round can open.
 
+## What a round asks of you
+
+Three things, and no more:
+
+1. **`npm run check && npm test` green**, replay personas included.
+2. **A play narrative** as a comment on the round ticket: two minutes of your own build described in words, from the replay video - what you did, where it got dull, what you changed because of it. "The telemetry says it works" is not a play narrative.
+3. **A retro** appended to `glow/RETRO.md` in your own workspace repo before your shift ends: what the brief asked, what you changed, what was wrong with it, what you will try next. It is the first thing you read next round.
+
+You do not owe `ARCHITECTURE.md` or a `CHANGELOG.md` entry for a win. An owner-side consolidation pass writes both after the round is banked (below). Spend the round on the game.
+
 ## Banking the win
 
-The winning repo is merged into canonical `main` by the owner, and the merge commit is tagged twice: `round-N-winner` and `round-(N+1)-base`.
+The winning repo is merged into canonical `main` by the owner and the merge is tagged `round-N-winner`.
+That is the win; it is not yet where the next round starts.
 
-Two things must be in the winning branch or the merge is refused:
+The merge is refused when the branch is not built on `round-N-base`, or when the merged tree fails `npm run check` or the tests.
 
-1. **`ARCHITECTURE.md` is updated** to describe the codebase as it now is.
-2. **A `CHANGELOG.md` entry** for the round: what changed and why, in enough detail that the other two contestants can pick it up in the morning.
+Then the owner runs the **consolidation pass** on canonical `main`, in a neutral operator session that is not competing in the next round:
 
-Publishing your understanding of the codebase is the price of banking the win.
-A win with a stale architecture doc is not a win - fix the docs and the merge goes through, but the round is not banked until it does.
+- dead code, retired probes and duplicated gate scripts are pruned
+- one test suite is kept green and honest
+- `ARCHITECTURE.md` is rewritten to describe the tree as it now is
+- the round gets its `CHANGELOG.md` entry, with a "What else was tried" section folding in what the two losing forks did
+
+`round-(N+1)-base` is tagged only after that pass, so the round you open tomorrow always starts from a tree whose docs match its code.
 
 Reading the previous winner's diff, `ARCHITECTURE.md`, and changelog entry at the start of your round is how the two losing contestants catch up.
 It is the first thing to do each morning.
