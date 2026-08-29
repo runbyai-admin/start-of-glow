@@ -19,9 +19,9 @@
  * - it falls back to "compat" mode: real input, wall-clock frames, no audio,
  * and every output says so.
  *
- * Renders are serialised host-wide with flock on /tmp/glow-replay.lock (kept
- * 0666 because the accounts sharing it are separate Linux users), so three
- * panes asking for a video at once queue instead of thrashing the cores.
+ * Renders go through a host-wide queue (scripts/render-queue.sh): two slots,
+ * and at most one render per account, so three panes asking for a video at
+ * once neither thrash four cores nor wait behind two full renders.
  */
 import { chromium } from "@playwright/test";
 import { spawn, spawnSync } from "node:child_process";
@@ -33,7 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const LOCK_FILE = "/tmp/glow-replay.lock";
+const QUEUE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "render-queue.sh");
 const VIEW = { w: 1280, h: 720 };
 const WORLD_WIDTH = 2560;
 /** The beacon's authored world position - the same constant the play-gate steers to. */
@@ -49,7 +49,6 @@ function parseArgs(argv) {
     out: null,
     capture: true,
     render: true,
-    lock: true,
     quiet: false,
   };
   const rest = [];
@@ -60,7 +59,6 @@ function parseArgs(argv) {
     else if (a === "--out") opts.out = argv[++i];
     else if (a === "--no-capture") opts.capture = false;
     else if (a === "--no-render") opts.render = false;
-    else if (a === "--no-lock") opts.lock = false;
     else if (a === "--quiet") opts.quiet = true;
     else rest.push(a);
   }
@@ -71,28 +69,20 @@ function parseArgs(argv) {
 }
 
 /**
- * Re-exec under flock so only one replay renders on this host at a time.
+ * Re-exec through the host render queue: two slots, one render per account.
  * Skipped for logic-only runs (--no-render), which cost no GPU and are what
  * the persona gate uses.
+ *
+ * There is no bypass flag. A render that skips the queue does not go faster -
+ * it makes every render on the box slower, its own included - and the queue
+ * exists because that is not obvious from inside one pane.
  */
-function serialiseOrExit(opts, argv) {
-  if (!opts.lock || !opts.render || process.env.GLOW_REPLAY_LOCKED === "1") return false;
-  // The four accounts that render on this host are four Linux users, so the
-  // lock file has to be writable by all of them: created 0644 by whoever runs
-  // first, every other account gets "flock: cannot open lock file: Permission
-  // denied" and its render dies before it starts. Create it 0666 and repair
-  // the mode when we own it; a file someone else owns at 0666 is already fine.
-  fs.closeSync(fs.openSync(LOCK_FILE, "a", 0o666));
-  try {
-    fs.chmodSync(LOCK_FILE, 0o666);
-  } catch {
-    // owned by another account and already usable, or we cannot fix it - flock
-    // below reports the real problem either way.
-  }
-  log(`waiting for the host render lock (${LOCK_FILE})`);
-  const child = spawnSync("flock", ["-w", "7200", LOCK_FILE, process.execPath, ...argv], {
+function queueOrExit(opts, argv) {
+  if (!opts.render || process.env.GLOW_REPLAY_QUEUED === "1") return false;
+  log("queueing for a host render slot");
+  const child = spawnSync(QUEUE_SCRIPT, [process.execPath, ...argv], {
     stdio: "inherit",
-    env: { ...process.env, GLOW_REPLAY_LOCKED: "1" },
+    env: { ...process.env, GLOW_REPLAY_QUEUED: "1" },
   });
   process.exit(child.status ?? 1);
 }
@@ -414,7 +404,11 @@ export async function runReplay(opts) {
     fs.mkdirSync(framesDir, { recursive: true });
     ffmpeg = spawn(
       "ffmpeg",
-      ["-y", "-v", "error", "-f", "image2pipe", "-framerate", "60", "-i", "-",
+      // One encoder thread on purpose: the queue runs two renders at once on
+      // four cores, and the frame rate is set by Chromium's software raster,
+      // not by x264 - an unbounded encoder just takes cores from the browser
+      // that is feeding it.
+      ["-y", "-v", "error", "-threads", "1", "-f", "image2pipe", "-framerate", "60", "-i", "-",
        "-vf", `scale=${VIEW.w}:${VIEW.h}`, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
        "-pix_fmt", "yuv420p", path.join(opts.out, "video-silent.mp4")],
       { stdio: ["pipe", "inherit", "inherit"] },
@@ -558,7 +552,7 @@ export function printMetrics(m) {
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   const opts = parseArgs(process.argv.slice(2));
-  serialiseOrExit(opts, process.argv.slice(1));
+  queueOrExit(opts, process.argv.slice(1));
   const metrics = await runReplay(opts);
   printMetrics(metrics);
   log(`wrote ${opts.out}`);
