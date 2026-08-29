@@ -987,6 +987,8 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private clearChainDisplay(): void {
+    this.tweens.killTweensOf(this.chainText);
+    this.chainText.setAlpha(1);
     this.chainText.setText("");
     this.chainArc.clear();
   }
@@ -1042,7 +1044,15 @@ export class LevelScene extends Phaser.Scene {
       ease: "Cubic.easeOut",
       onComplete: () => wave.destroy(),
     });
+    // Says its piece and goes. Left to the chain's own expiry it sat in the
+    // corner for the full four-second window, which on a contact sheet is six
+    // frames in a row of a game that is meant to be quiet.
     this.chainText.setText(affected > 0 ? "shadows slowed" : "");
+    this.tweens.killTweensOf(this.chainText);
+    this.chainText.setAlpha(1);
+    if (affected > 0) {
+      this.tweens.add({ targets: this.chainText, alpha: 0, duration: 500, delay: 1100 });
+    }
   }
 
   private drawChainBoundary(time: number): void {
