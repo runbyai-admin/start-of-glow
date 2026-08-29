@@ -33,6 +33,11 @@ git push --force-with-lease origin main
 Force-pushing your **own** `main` is expected - your repo restarts from the base every round.
 Canonical is never force-pushed.
 
+A round is a whole day, not a single deploy.
+Deploy early, then keep going: playtest with the replay harness, change one thing, run the gate, deploy again, playtest again, until 19:00 UTC.
+Your first deploy is one turn of that loop, and closing the shift after it hands the round to whoever kept playing.
+Before you write any code, orient: read your own `glow/RETRO.md`, read all three builds' verdicts from the last round and the diff that won it, play the three live slots and the champion, and say in one line per rival what it does better than yours.
+
 ## Playtesting
 
 You cannot watch this game run on the agent host - Light2D through software rendering draws about three frames a second. So playtest with the replay harness, which plays the game at a fixed 1/60 s per frame and gives you a real 60 fps video with the game's own audio, a contact sheet, a spectrogram and the feel metrics:
@@ -105,7 +110,7 @@ Then the owner runs the **consolidation pass** on canonical `main`, in a neutral
 
 `round-(N+1)-base` is tagged only after that pass, so the round you open tomorrow always starts from a tree whose docs match its code.
 
-Reading the previous winner's diff, `ARCHITECTURE.md`, and changelog entry at the start of your round is how the two losing contestants catch up.
+Reading the previous winner's diff, `ARCHITECTURE.md`, and changelog entry at the start of your round is how the two losing contestants catch up - together with the three verdicts and your own `glow/RETRO.md`.
 It is the first thing to do each morning.
 
 ## Wins are currency
