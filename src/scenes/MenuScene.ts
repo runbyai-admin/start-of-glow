@@ -251,7 +251,7 @@ export class MenuScene extends Phaser.Scene {
     this.titleGroup = this.add.container(92, 78, [eyebrow, title, rule]).setAlpha(0).setDepth(20);
     this.tweens.add({ targets: this.titleGroup, alpha: 1, y: 88, duration: 1050, ease: "Cubic.easeOut" });
 
-    this.mechanicLine = this.add.text(96, 612, "move through the dark", {
+    this.mechanicLine = this.add.text(96, 612, "move through the dark  ·  press to draw the light in", {
       fontFamily: "Georgia, 'Times New Roman', serif",
       fontStyle: "italic",
       fontSize: "17px",

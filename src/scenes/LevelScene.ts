@@ -34,11 +34,12 @@ const FIREFLY_COUNT = 11;
  */
 const WISP_MAX_SPEED = 480;
 /**
- * How close a hazard lets the player linger before it notices. Not a constant
- * any more: a shadow sees the light, so the distance scales with the player's
- * own reach (see alertRadius()). A wisp burning at full reach is hunted from
- * across the glade; one that has just spent itself on a pull is nearly unseen.
- * That is the other half of the round's verb - spending light buys you dark.
+ * How far a shadow notices the light from. Not a constant any more: a shadow
+ * sees the light, so the distance scales with the player's own reach (see
+ * alertRadius()). A wisp burning at full reach wakes the glade from a long way
+ * off; one that has just spent itself on a pull goes nearly unseen. Noticing
+ * is only a look, though - the chase speed ramps in from ALERT_RADIUS_FLOOR,
+ * which is fixed. See checkHazardAlerts().
  */
 const ALERT_RADIUS_FLOOR = HAZARD_RADIUS * 2.4;
 const ALERT_RADIUS_PER_REACH = 0.6;
@@ -58,8 +59,9 @@ const RADIANCE_TIME_SCALE = 0.42;
  * REACH_PER_MOTE back. Even a full armful gives back less than the press cost,
  * so reaching is never the cheap way to farm light - it is what you spend light
  * on to take the mote you could not safely walk to, or to take four at once
- * before a shadow arrives. Walking into motes is what makes you bright again. The lit radius IS the rule: there is nothing to read, you can see how
- * far you can reach because that is exactly as far as you can see.
+ * before a shadow arrives. Walking into motes is what makes you bright again.
+ * The lit radius IS the rule: nothing to read, because you can see exactly as
+ * far as you can reach.
  */
 const REACH_START = 390;
 const REACH_MIN = 170;
@@ -67,8 +69,9 @@ const REACH_MAX = 470;
 const REACH_PER_MOTE = 32;
 const GATHER_COST = 170;
 const GATHER_COOLDOWN_MS = 420;
-/** Per-mote stagger on the way in - the cascade is the reward, so it is heard as notes, not a chord. */
+/** A reach takes an armful, not a room; the rest stays on the ground. */
 const GATHER_MAX_MOTES = 4;
+/** Per-mote stagger on the way in - the cascade is the reward, so it lands as notes, not a chord. */
 const GATHER_STAGGER_MS = 62;
 const GATHER_FLIGHT_MS = 300;
 
@@ -463,14 +466,6 @@ export class LevelScene extends Phaser.Scene {
   }
 
   /**
-   * A shadow-wisp that has noticed the player: closer than ALERT_RADIUS for
-   * even one frame speeds it up (via the running patrol tween's timeScale,
-   * not a rewritten path - still fully deterministic for a fixed play, just
-   * reactive to it) and brightens its own light as a fair "it sees you"
-   * telegraph. Patrol *shape* never changes, only its pace and how visible
-   * it is - a hazard should feel alive without ever feeling like it cheated.
-   */
-  /**
    * Noticing and hunting are two different distances. A shadow *sees* the light
    * as far as the light carries (alertRadius, which grows with the reach), and
    * that is a look: its own glow comes up so the player can read it from across
@@ -478,6 +473,10 @@ export class LevelScene extends Phaser.Scene {
    * between. Coupling the full chase speed to the reach - the first version of
    * this - punished the one player who most needs help, the one who has not
    * found the press yet and is therefore walking around at full brightness.
+   *
+   * Either way it is the running patrol tween's timeScale that changes, never
+   * the path - the patrol shape stays exactly as authored, so a hazard is
+   * reactive without ever feeling like it cheated.
    */
   private checkHazardAlerts(): void {
     const notice = this.alertRadius();
@@ -566,7 +565,10 @@ export class LevelScene extends Phaser.Scene {
    * a question the screen already asked. It stops for good on that press.
    */
   private inviteGather(): void {
-    if (this.taught || this.locked || this.inviteAt > this.time.now) return;
+    // Six is asking; more than six is nagging. After that the quiet line on
+    // level 1 is the only thing still offering, and the screen goes back to
+    // being the player's problem.
+    if (this.taught || this.locked || this.inviteShown >= 6 || this.inviteAt > this.time.now) return;
     let inReach = false;
     for (const mote of this.motes) {
       if (Phaser.Math.Distance.Between(mote.x, mote.y, this.wisp.x, this.wisp.y) <= this.reach) {
@@ -1160,26 +1162,19 @@ export class LevelScene extends Phaser.Scene {
       this.target.set(START_X, START_Y);
       this.wisp.setPosition(START_X, START_Y);
       this.wispLight.setPosition(START_X, START_Y);
-      this.wisp.setScale(0.5);
-      // Restore the light itself too - the snuff tween shrank its radius, and
-      // nothing else resets it until the next collect. A respawned light
-      // should match a fresh spawn at zero motes, not stay snuffed-small.
+      // What a shadow takes is your light, not your work. The old fail wiped
+      // the level's motes and started it again, which at twenty seconds in is
+      // the moment a player stops playing - and it punished the one thing the
+      // round wants them doing, which is going near a shadow to reach past it.
+      // Now the sting is the reach itself: it is snuffed to the floor and only
+      // motes bring it back, so a death late in a level means finishing that
+      // level nearly blind, walking back across ground you already lit. Same
+      // currency as the press, so there is one number in the game and dying,
+      // spending and collecting all speak it.
       this.tweens.killTweensOf(this.wispLight);
-      this.reach = REACH_START;
-      this.wispLight.radius = REACH_START;
+      this.setReach(REACH_MIN);
       this.wispLight.intensity = this.baseIntensity();
       this.gatherReadyAt = 0;
-      this.collected = 0;
-      this.levelClear = false;
-      this.flawlessNow = false;
-      this.beacon.setAlpha(0.05);
-      this.beaconLight.intensity = 0;
-      this.beaconLight.setColor(0xffcf8a);
-      this.tweens.killTweensOf(this.beacon);
-      this.beacon.setScale(1);
-      this.tweens.killTweensOf(this.openLine);
-      this.openLine.setAlpha(0);
-      this.spawnMotes();
       this.updateHud();
       this.reportState();
       this.graceUntil = this.time.now + RESPAWN_GRACE_MS;
