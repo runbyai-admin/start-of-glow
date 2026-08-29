@@ -41,8 +41,8 @@ const WISP_MAX_SPEED = 480;
  * That is the other half of the round's verb - spending light buys you dark.
  */
 const ALERT_RADIUS_FLOOR = HAZARD_RADIUS * 2.4;
-const ALERT_RADIUS_PER_REACH = 0.62;
-const ALERT_RADIUS_CEILING = 300;
+const ALERT_RADIUS_PER_REACH = 0.55;
+const ALERT_RADIUS_CEILING = 270;
 const ALERT_TIME_SCALE = 1.55;
 const ALERT_LIGHT_INTENSITY = 1.55;
 const CALM_LIGHT_INTENSITY = 0.9;
@@ -133,6 +133,7 @@ export class LevelScene extends Phaser.Scene {
   private reachLine?: Phaser.GameObjects.Text;
   private inviteAt = 0;
   private lastShakeAt = 0;
+  private deathVeil!: Phaser.GameObjects.Rectangle;
   private inviteShown = 0;
   private incoming: Phaser.GameObjects.Image[] = [];
 
@@ -533,6 +534,12 @@ export class LevelScene extends Phaser.Scene {
       texture!.refresh();
     }
     this.add.image(width / 2, height / 2, key).setScrollFactor(0).setDepth(90);
+
+    this.deathVeil = this.add
+      .rectangle(width / 2, height / 2, width, height, 0x120424)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setDepth(94);
   }
 
   /**
@@ -1081,7 +1088,19 @@ export class LevelScene extends Phaser.Scene {
     this.locked = true;
     this.resets += 1;
     this.ambience.hit();
-    this.cameras.main.flash(220, 40, 10, 60);
+    // The dark closes over you. A camera flash - even a violet one - answers
+    // "your light just went out" by turning the whole screen ON, which is
+    // exactly backwards in this game and reads as a rendering fault at 720p.
+    this.tweens.killTweensOf(this.deathVeil);
+    this.deathVeil.setAlpha(0);
+    this.tweens.add({
+      targets: this.deathVeil,
+      alpha: { from: 0, to: 0.82 },
+      duration: 200,
+      yoyo: true,
+      hold: 190,
+      ease: "Sine.easeOut",
+    });
     this.cameras.main.shake(220, 0.006);
 
     this.tweens.add({
@@ -1132,7 +1151,7 @@ export class LevelScene extends Phaser.Scene {
     const wasFlawless = this.collected >= this.totalMotes;
     const flawless = this.flawlessLevels + (wasFlawless ? 1 : 0);
     this.ambience.levelComplete(wasFlawless);
-    this.cameras.main.flash(280, 255, 232, 190);
+    this.cameras.main.flash(170, 255, 232, 190);
     this.cameras.main.fadeOut(520, 8, 7, 14);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const next = this.config.index + 1;
