@@ -22,6 +22,10 @@ interface GlowTestState {
   /** World positions of the motes still uncollected / the patrolling hazards; empty outside a level. */
   motes: Array<{ x: number; y: number }>;
   hazards: Array<{ x: number; y: number }>;
+  /** How far the light currently reaches - the pull radius and the lit radius are one number. */
+  reach?: number;
+  /** Presses of the gather this level attempt. */
+  gathers?: number;
   /** Visible lumen-chain state; zero outside an active chain. */
   chain?: number;
   chainRemainingMs?: number;

@@ -1,0 +1,11 @@
+{
+  "name": "reacher",
+  "description": "Plays the reach: closes on the nearest safe mote and presses roughly once a second, so the run is mostly gathered light rather than walked-into light. The run a player has once they have found the verb.",
+  "seed": 20260901,
+  "input": "mouse",
+  "phases": [
+    { "untilSeconds": 1.2, "mode": "wait" },
+    { "untilSeconds": 1.3, "mode": "start" },
+    { "mode": "collect", "safeDist": 170, "fleeDist": 150, "pulseEverySeconds": 0.9 }
+  ]
+}

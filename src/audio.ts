@@ -135,6 +135,67 @@ export class Ambience {
     }
   }
 
+  /** One short white-noise buffer, made once per context and shared by the transient voices. */
+  private noiseCache: AudioBuffer | null = null;
+  private noiseBuffer(ctx: AudioContext): AudioBuffer {
+    if (this.noiseCache) return this.noiseCache;
+    const size = Math.floor(ctx.sampleRate * 0.5);
+    const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < size; i += 1) data[i] = Math.random() * 2 - 1;
+    this.noiseCache = buffer;
+    return buffer;
+  }
+
+  /**
+   * The reach. A short upward filtered-noise inhale plus a sine that bends up -
+   * the sound of light being drawn in rather than struck. `caught` opens the
+   * filter and adds a soft low body so a press that lands is audibly fuller
+   * than a press into the dark, before the first mote's chime even arrives.
+   */
+  gather(caught: number): void {
+    if (!this.ctx || !this.master) return;
+    try {
+      const ctx = this.ctx;
+      const master = this.master;
+      const now = ctx.currentTime;
+      const hit = caught > 0;
+      const dur = hit ? 0.34 : 0.22;
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = this.noiseBuffer(ctx);
+      const band = ctx.createBiquadFilter();
+      band.type = "bandpass";
+      band.Q.value = 1.4;
+      band.frequency.setValueAtTime(hit ? 420 : 320, now);
+      band.frequency.exponentialRampToValueAtTime(hit ? 2200 + caught * 260 : 900, now + dur);
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.linearRampToValueAtTime(hit ? 0.09 : 0.035, now + 0.03);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      noise.connect(band);
+      band.connect(noiseGain);
+      noiseGain.connect(master);
+      noise.start(now);
+      noise.stop(now + dur + 0.05);
+
+      const body = ctx.createOscillator();
+      body.type = "sine";
+      body.frequency.setValueAtTime(hit ? 138 : 116, now);
+      body.frequency.exponentialRampToValueAtTime(hit ? 330 : 150, now + dur);
+      const bodyGain = ctx.createGain();
+      bodyGain.gain.setValueAtTime(0.0001, now);
+      bodyGain.gain.linearRampToValueAtTime(hit ? 0.1 : 0.04, now + 0.025);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + dur + 0.08);
+      body.connect(bodyGain);
+      bodyGain.connect(master);
+      body.start(now);
+      body.stop(now + dur + 0.12);
+    } catch {
+      /* a missed reach sound is not a game-breaking error */
+    }
+  }
+
   /** Low warm bloom at a full chain: distinct from pickup and beacon voices. */
   radiance(): void {
     if (!this.ctx || !this.master) return;

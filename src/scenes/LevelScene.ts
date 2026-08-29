@@ -33,8 +33,17 @@ const FIREFLY_COUNT = 11;
  * fastest, level 3's 120) so avoidance is still a real skill, not a freebie.
  */
 const WISP_MAX_SPEED = 480;
-/** How close a hazard lets the player linger before it notices - see checkHazardAlerts(). */
-const ALERT_RADIUS = HAZARD_RADIUS * 2.6;
+/**
+ * How far a shadow notices the light from. Not a constant any more: a shadow
+ * sees the light, so the distance scales with the player's own reach (see
+ * alertRadius()). A wisp burning at full reach wakes the glade from a long way
+ * off; one that has just spent itself on a pull goes nearly unseen. Noticing
+ * is only a look, though - the chase speed ramps in from ALERT_RADIUS_FLOOR,
+ * which is fixed. See checkHazardAlerts().
+ */
+const ALERT_RADIUS_FLOOR = HAZARD_RADIUS * 2.4;
+const ALERT_RADIUS_PER_REACH = 0.6;
+const ALERT_RADIUS_CEILING = 290;
 const ALERT_TIME_SCALE = 1.55;
 const ALERT_LIGHT_INTENSITY = 1.55;
 const CALM_LIGHT_INTENSITY = 0.9;
@@ -42,12 +51,38 @@ const RADIANCE_RADIUS = 390;
 const RADIANCE_SLOW_MS = 1800;
 const RADIANCE_TIME_SCALE = 0.42;
 
+/**
+ * The reach. This round's one verb: your glow is how far you can pull light in,
+ * and pulling spends it. Press (click, tap or space) and every mote inside the
+ * lit circle comes to you; the circle shrinks by GATHER_COST whether or not it
+ * catches anything, and every mote you take - by reaching or by touching - puts
+ * REACH_PER_MOTE back. Even a full armful gives back less than the press cost,
+ * so reaching is never the cheap way to farm light - it is what you spend light
+ * on to take the mote you could not safely walk to, or to take four at once
+ * before a shadow arrives. Walking into motes is what makes you bright again.
+ * The lit radius IS the rule: nothing to read, because you can see exactly as
+ * far as you can reach.
+ */
+const REACH_START = 390;
+const REACH_MIN = 170;
+const REACH_MAX = 470;
+const REACH_PER_MOTE = 32;
+const GATHER_COST = 170;
+const GATHER_COOLDOWN_MS = 420;
+/** A reach takes an armful, not a room; the rest stays on the ground. */
+const GATHER_MAX_MOTES = 4;
+/** Per-mote stagger on the way in - the cascade is the reward, so it lands as notes, not a chord. */
+const GATHER_STAGGER_MS = 62;
+const GATHER_FLIGHT_MS = 300;
+
 interface LevelInitData {
   levelIndex: number;
   ambience: Ambience;
   resets?: number;
   /** Flawless levels (every mote found) completed earlier in this run. */
   flawless?: number;
+  /** The player has already pressed once this run - do not teach the reach again. */
+  taught?: boolean;
 }
 
 /** Cosmetic per-mood tint - purely a palette shift between stages, same shapes. */
@@ -85,6 +120,8 @@ export class LevelScene extends Phaser.Scene {
     light: Phaser.GameObjects.Light;
     tween?: Phaser.Tweens.Tween;
     alert: boolean;
+    /** 0 at the edge of notice, 1 at hunting range - the speed-up ramps across it. */
+    pressure: number;
     slowUntil: number;
   }> = [];
 
@@ -97,10 +134,26 @@ export class LevelScene extends Phaser.Scene {
   private chainArc!: Phaser.GameObjects.Graphics;
   private chainText!: Phaser.GameObjects.Text;
 
+  private reachRing!: Phaser.GameObjects.Graphics;
+  private reachLine?: Phaser.GameObjects.Text;
+  private inviteAt = 0;
+  private lastShakeAt = 0;
+  private gutter = 0;
+  private deathVeil!: Phaser.GameObjects.Rectangle;
+  private arrivalVeil!: Phaser.GameObjects.Rectangle;
+  private inviteShown = 0;
+  private incoming: Phaser.GameObjects.Image[] = [];
+
   private collected = 0;
   /** Motes actually placed this level - derived from the data used, never assumed from config. */
   private totalMotes = 0;
   private pulseBoost = 0;
+  /** How far the light reaches right now - the light's radius, the pull's radius, one number. */
+  private reach = REACH_START;
+  private gatherReadyAt = 0;
+  private gathers = 0;
+  /** Motes were in reach and the player has not pressed yet - drives the wordless invitation. */
+  private taught = false;
   private levelClear = false;
   /** Every mote currently collected - the flawless variant is showing. */
   private flawlessNow = false;
@@ -120,12 +173,21 @@ export class LevelScene extends Phaser.Scene {
     this.collected = 0;
     this.totalMotes = 0;
     this.pulseBoost = 0;
+    this.reach = REACH_START;
+    this.gatherReadyAt = 0;
+    this.gathers = 0;
+    this.inviteAt = 0;
+    this.inviteShown = 0;
+    this.gutter = 0;
+    this.reachLine = undefined;
+    this.taught = data.taught ?? false;
     this.levelClear = false;
     this.flawlessNow = false;
     this.locked = false;
     this.chainState = emptyChain();
     this.moteConfigs = [];
     this.motes = [];
+    this.incoming = [];
     this.hazards = [];
     this.target.set(START_X, START_Y);
   }
@@ -258,11 +320,12 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private spawnMotes(): void {
-    for (const m of this.motes) {
+    for (const m of this.motes.concat(this.incoming)) {
       this.tweens.killTweensOf(m);
       m.destroy();
     }
     this.motes = [];
+    this.incoming = [];
     const rng = new Phaser.Math.RandomDataGenerator([`start-of-glow-motes-${this.config.index}`]);
     for (const cfg of this.moteConfigs) {
       const mote = this.add.image(cfg.x, cfg.y, "mote").setBlendMode(Phaser.BlendModes.ADD).setScale(0.55).setDepth(5);
@@ -294,8 +357,17 @@ export class LevelScene extends Phaser.Scene {
     this.trail.setDepth(9);
 
     this.wisp = this.add.image(this.target.x, this.target.y, "wisp").setBlendMode(Phaser.BlendModes.ADD).setScale(0.5).setDepth(10);
-    this.wispLight = this.lights.addLight(this.wisp.x, this.wisp.y, 347, 0xbfe4ff, 1.6);
+    this.wispLight = this.lights.addLight(this.wisp.x, this.wisp.y, REACH_START, 0xbfe4ff, 1.6);
     this.trail.startFollow(this.wisp);
+
+    // The edge of the light, drawn thin. Light2D already falls off at exactly
+    // this radius, but a soft gradient does not tell you where the rule ends -
+    // this does, and it only becomes bright when there is something to take.
+    this.reachRing = this.add.graphics().setDepth(4);
+    // One source of truth for the wisp's size: derive the spawn scale from the
+    // starting reach rather than leaving a hand-set 0.5 that the first collect
+    // would silently correct.
+    this.setReach(REACH_START);
   }
 
   /**
@@ -327,7 +399,7 @@ export class LevelScene extends Phaser.Scene {
         .setDepth(6)
         .setScale(rng.realInRange(0.85, 1.15));
       const light = this.lights.addLight(0, 0, 130, 0x9a6efa, CALM_LIGHT_INTENSITY);
-      const hazard = { img, light, alert: false, slowUntil: 0 };
+      const hazard = { img, light, alert: false, pressure: 0, slowUntil: 0 };
       this.hazards.push(hazard);
 
       const waypoints: Phaser.Math.Vector2[] = [];
@@ -399,32 +471,45 @@ export class LevelScene extends Phaser.Scene {
   }
 
   /**
-   * A shadow-wisp that has noticed the player: closer than ALERT_RADIUS for
-   * even one frame speeds it up (via the running patrol tween's timeScale,
-   * not a rewritten path - still fully deterministic for a fixed play, just
-   * reactive to it) and brightens its own light as a fair "it sees you"
-   * telegraph. Patrol *shape* never changes, only its pace and how visible
-   * it is - a hazard should feel alive without ever feeling like it cheated.
+   * Noticing and hunting are two different distances. A shadow *sees* the light
+   * as far as the light carries (alertRadius, which grows with the reach), and
+   * that is a look: its own glow comes up so the player can read it from across
+   * the glade. It only *hunts* at close quarters, and the speed-up ramps in
+   * between. Coupling the full chase speed to the reach - the first version of
+   * this - punished the one player who most needs help, the one who has not
+   * found the press yet and is therefore walking around at full brightness.
+   *
+   * Either way it is the running patrol tween's timeScale that changes, never
+   * the path - the patrol shape stays exactly as authored, so a hazard is
+   * reactive without ever feeling like it cheated.
    */
   private checkHazardAlerts(): void {
+    const notice = this.alertRadius();
     for (const h of this.hazards) {
       const dist = Phaser.Math.Distance.Between(h.img.x, h.img.y, this.wisp.x, this.wisp.y);
-      const alert = dist <= ALERT_RADIUS;
-      h.alert = alert;
+      h.alert = dist <= notice;
+      h.pressure = h.alert
+        ? Phaser.Math.Clamp(1 - (dist - ALERT_RADIUS_FLOOR) / Math.max(1, notice - ALERT_RADIUS_FLOOR), 0, 1)
+        : 0;
       if (h.tween) h.tween.timeScale = this.hazardTimeScale(h);
       h.light.intensity = h.slowUntil > this.time.now
         ? 0.62
-        : alert ? ALERT_LIGHT_INTENSITY : CALM_LIGHT_INTENSITY;
+        : CALM_LIGHT_INTENSITY + (ALERT_LIGHT_INTENSITY - CALM_LIGHT_INTENSITY) * (h.alert ? 0.4 + 0.6 * h.pressure : 0);
     }
   }
 
-  private hazardTimeScale(hazard: { alert: boolean; slowUntil: number }): number {
+  /** The distance at which a shadow notices the light - as far as the light carries. */
+  private alertRadius(): number {
+    return Phaser.Math.Clamp(this.reach * ALERT_RADIUS_PER_REACH, ALERT_RADIUS_FLOOR, ALERT_RADIUS_CEILING);
+  }
+
+  private hazardTimeScale(hazard: { alert: boolean; pressure: number; slowUntil: number }): number {
     if (hazard.slowUntil > this.time.now) return RADIANCE_TIME_SCALE;
-    return hazard.alert ? ALERT_TIME_SCALE : 1;
+    return 1 + (ALERT_TIME_SCALE - 1) * hazard.pressure;
   }
 
   private patrol(
-    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean; slowUntil: number },
+    hazard: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Light; tween?: Phaser.Tweens.Tween; alert: boolean; pressure: number; slowUntil: number },
     waypoints: Phaser.Math.Vector2[],
     index: number,
   ): void {
@@ -469,6 +554,61 @@ export class LevelScene extends Phaser.Scene {
       texture!.refresh();
     }
     this.add.image(width / 2, height / 2, key).setScrollFactor(0).setDepth(90);
+
+    this.deathVeil = this.add
+      .rectangle(width / 2, height / 2, width, height, 0x120424)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setDepth(94);
+
+    this.arrivalVeil = this.add
+      .rectangle(width / 2, height / 2, width, height, 0xffe8c0)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setDepth(93)
+      .setBlendMode(Phaser.BlendModes.ADD);
+  }
+
+  /**
+   * Teaching the press without saying it: a ghost of the reach collapsing
+   * inward, repeated every couple of seconds while there is something in range
+   * and the player has not tried it yet. It is the gather's own animation
+   * played at a whisper - the first real press then looks like the answer to
+   * a question the screen already asked. It stops for good on that press.
+   */
+  private inviteGather(): void {
+    // Six is asking; more than six is nagging. After that the quiet line on
+    // level 1 is the only thing still offering, and the screen goes back to
+    // being the player's problem.
+    if (this.taught || this.locked || this.inviteShown >= 6 || this.inviteAt > this.time.now) return;
+    let inReach = false;
+    for (const mote of this.motes) {
+      if (Phaser.Math.Distance.Between(mote.x, mote.y, this.wisp.x, this.wisp.y) <= this.reach) {
+        inReach = true;
+        break;
+      }
+    }
+    if (!inReach) return;
+    this.inviteAt = this.time.now + 2100;
+    const ghost = this.add
+      .circle(this.wisp.x, this.wisp.y, this.reach, 0xffe2a8, 0)
+      .setStrokeStyle(2, 0xffe2a8, 0.3)
+      .setDepth(4);
+    this.tweens.add({
+      targets: ghost,
+      radius: 18,
+      alpha: 0,
+      duration: 900,
+      ease: "Cubic.easeIn",
+      onUpdate: () => ghost.setPosition(this.wisp.x, this.wisp.y),
+      onComplete: () => ghost.destroy(),
+    });
+    // Words are the fallback, not the lesson: only after the wordless version
+    // has played three times unanswered, and only on the first level.
+    this.inviteShown += 1;
+    if (this.inviteShown === 3 && this.config.index === 1 && this.reachLine) {
+      this.tweens.add({ targets: this.reachLine, alpha: { from: 0, to: 0.75 }, duration: 700, ease: "Sine.easeInOut" });
+    }
   }
 
   private buildHud(): void {
@@ -512,6 +652,19 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(100)
       .setScrollFactor(0);
 
+    if (this.config.index === 1) {
+      this.reachLine = this.add
+        .text(VIEW_WIDTH / 2, VIEW_HEIGHT - 54, "press · draw the light in", {
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontSize: "17px",
+          color: "#ffd9a0",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0)
+        .setDepth(100)
+        .setScrollFactor(0);
+    }
+
     this.chainArc = this.add.graphics().setDepth(95).setScrollFactor(0);
     this.chainText = this.add.text(VIEW_WIDTH - 28, 24, "", {
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -532,7 +685,11 @@ export class LevelScene extends Phaser.Scene {
       this.ambience.unlock();
       if (this.locked) return;
       this.target.set(pointer.worldX, pointer.worldY);
-      this.pulse();
+      this.gather();
+    });
+    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on("down", () => {
+      this.ambience.unlock();
+      this.gather();
     });
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
@@ -543,13 +700,157 @@ export class LevelScene extends Phaser.Scene {
     };
   }
 
-  private pulse(): void {
-    this.pulseBoost = 1.6;
-    this.trail.explode(24, this.wisp.x, this.wisp.y);
+  /**
+   * The press. Everything inside the lit circle is drawn in, nearest first, and
+   * the circle pays for it. A reach that catches nothing still costs - reaching
+   * into the dark on spec is how you end up small - but the floor at REACH_MIN
+   * means a bad run of presses makes you weak, never stuck.
+   */
+  private gather(): void {
+    if (this.locked || this.time.now < this.gatherReadyAt) return;
+    this.gatherReadyAt = this.time.now + GATHER_COOLDOWN_MS;
+    this.gathers += 1;
+    if (!this.taught) {
+      this.taught = true;
+      if (this.reachLine) {
+        this.tweens.killTweensOf(this.reachLine);
+        this.tweens.add({ targets: this.reachLine, alpha: 0, duration: 420 });
+      }
+    }
+
+    const caught: Array<{ mote: Phaser.GameObjects.Image; d: number }> = [];
+    for (let i = this.motes.length - 1; i >= 0; i -= 1) {
+      const mote = this.motes[i];
+      const d = Phaser.Math.Distance.Between(mote.x, mote.y, this.wisp.x, this.wisp.y);
+      if (d > this.reach) continue;
+      this.motes.splice(i, 1);
+      this.incoming.push(mote);
+      caught.push({ mote, d });
+    }
+    caught.sort((a, b) => a.d - b.d);
+    // A reach takes an armful, not a room. The overflow goes straight back so
+    // a wide-open press still leaves something to walk to, and the cascade
+    // stays a phrase you can hear rather than a chord.
+    for (const spare of caught.splice(GATHER_MAX_MOTES)) {
+      this.incoming.splice(this.incoming.indexOf(spare.mote), 1);
+      this.motes.push(spare.mote);
+    }
+
+    const spent = this.reach;
+    this.setReach(this.reach - GATHER_COST);
+    this.gatherWave(spent, caught.length);
+    this.ambience.gather(caught.length);
+    this.pulseBoost = caught.length > 0 ? 1.5 : 0.5;
+
+    caught.forEach(({ mote, d }, index) => {
+      this.tweens.killTweensOf(mote);
+      this.tweens.add({
+        targets: mote,
+        x: () => this.wisp.x,
+        y: () => this.wisp.y,
+        scale: 0.9,
+        alpha: 1,
+        delay: index * GATHER_STAGGER_MS,
+        duration: GATHER_FLIGHT_MS + d * 0.28,
+        ease: "Cubic.easeIn",
+        onComplete: () => this.absorb(mote),
+      });
+    });
+  }
+
+  /** The inward ring: the reach collapsing onto the wisp, so the press has a shape. */
+  private gatherWave(from: number, caughtCount: number): void {
+    const hit = caughtCount > 0;
+    const ring = this.add
+      .circle(this.wisp.x, this.wisp.y, from, 0xffe2a8, 0)
+      .setStrokeStyle(hit ? 3 : 1.5, hit ? 0xffe2a8 : 0x8fb4d8, hit ? 0.8 : 0.34)
+      .setDepth(7);
+    this.tweens.add({
+      targets: ring,
+      radius: 14,
+      alpha: hit ? 0.9 : 0.25,
+      duration: hit ? 300 : 230,
+      ease: "Cubic.easeIn",
+      onUpdate: () => ring.setPosition(this.wisp.x, this.wisp.y),
+      onComplete: () => ring.destroy(),
+    });
+    if (hit) this.cameras.main.shake(70, 0.0012);
+  }
+
+  /** A gathered mote reaching the wisp - the same collect as a touch, one flight later. */
+  private absorb(mote: Phaser.GameObjects.Image): void {
+    const index = this.incoming.indexOf(mote);
+    if (index >= 0) this.incoming.splice(index, 1);
+    mote.destroy();
+    // A shadow caught the wisp while this one was still in flight: the light
+    // that snuffed the run does not get to bank the mote that was on its way.
+    if (this.locked) return;
+    this.trail.explode(16, this.wisp.x, this.wisp.y);
+    this.takeMote();
+  }
+
+  private setReach(next: number): void {
+    this.reach = Phaser.Math.Clamp(next, REACH_MIN, REACH_MAX);
+    this.wispLight.radius = this.reach;
+    this.wisp.setScale(0.34 + (this.reach / REACH_MAX) * 0.42);
+  }
+
+  /** Draw the edge of the reach, bright only while it has something in it. */
+  private drawReachRing(time: number): void {
+    this.reachRing.clear();
+    if (this.locked) return;
+    let inReach = false;
+    for (const mote of this.motes) {
+      if (Phaser.Math.Distance.Between(mote.x, mote.y, this.wisp.x, this.wisp.y) <= this.reach) {
+        inReach = true;
+        break;
+      }
+    }
+    const ready = this.time.now >= this.gatherReadyAt;
+    // Untaught players get a slow breathing edge the first time something is in
+    // range; once they have pressed once the ring settles down and stops asking.
+    const invite = inReach && !this.taught ? 0.18 + Math.sin(time * 0.006) * 0.12 : 0;
+    const alpha = (inReach ? (ready ? 0.34 : 0.13) : 0.06) + invite;
+    this.reachRing.lineStyle(inReach ? 2 : 1, inReach ? 0xffe2a8 : 0x8fb4d8, alpha);
+    this.reachRing.strokeCircle(this.wisp.x, this.wisp.y, this.reach);
+
+    // A filament to each mote in reach: what the press will take, before it is pressed.
+    if (!inReach) return;
+    for (const mote of this.motes) {
+      const d = Phaser.Math.Distance.Between(mote.x, mote.y, this.wisp.x, this.wisp.y);
+      if (d > this.reach) continue;
+      this.reachRing.lineStyle(1, 0xffe2a8, 0.16 + 0.26 * (1 - d / this.reach));
+      this.reachRing.lineBetween(this.wisp.x, this.wisp.y, mote.x, mote.y);
+    }
   }
 
   private baseIntensity(): number {
     return 1.6 + this.collected * 0.06;
+  }
+
+  /**
+   * Make the number felt. Reach is the only stat in the game and it never gets
+   * a HUD line, so it has to be legible in the light itself: a wide reach
+   * burns white and streams sparks, a spent one guts down to a small cold
+   * flicker. The gutter is the tell that a press just cost you something real.
+   */
+  private reachFeel(time: number, dt: number): number {
+    const t = Phaser.Math.Clamp((this.reach - REACH_MIN) / (REACH_MAX - REACH_MIN), 0, 1);
+    // Frequency only - the emitter's alpha ramp is what fades a spark out, and
+    // overriding it with a constant makes the trail pop instead of dissolve.
+    this.trail.frequency = 64 - t * 34;
+    this.wisp.setAlpha(0.78 + t * 0.22);
+
+    // Below a third of the range the light is running out: a fast, shallow
+    // flicker on top of the slow breath, so "nearly spent" is visible before
+    // it is a problem.
+    if (t > 0.34) {
+      this.gutter = Phaser.Math.Linear(this.gutter, 0, 1 - Math.pow(0.02, dt));
+      return this.gutter;
+    }
+    const depth = (0.34 - t) / 0.34;
+    this.gutter = Math.sin(time * 0.021) * 0.1 * depth + Math.sin(time * 0.053) * 0.06 * depth;
+    return this.gutter;
   }
 
   update(time: number, delta: number): void {
@@ -592,7 +893,10 @@ export class LevelScene extends Phaser.Scene {
 
     const breathe = Math.sin(time * 0.0007) * 0.12;
     this.pulseBoost = Phaser.Math.Linear(this.pulseBoost, 0, 1 - Math.pow(0.001, dt));
-    this.wispLight.intensity = this.baseIntensity() + breathe + this.pulseBoost;
+    this.wispLight.intensity = this.baseIntensity() + breathe + this.pulseBoost + this.reachFeel(time, dt);
+
+    this.drawReachRing(time);
+    this.inviteGather();
 
     const beforeExpiry = this.chainState;
     this.chainState = expireChain(this.chainState, time);
@@ -645,9 +949,6 @@ export class LevelScene extends Phaser.Scene {
       this.motes.splice(i, 1);
       this.tweens.killTweensOf(mote);
       this.trail.explode(18, mote.x, mote.y);
-      this.collected += 1;
-      this.advanceChain();
-      this.ambience.chime(this.collected, this.chainState.count);
       const pullX = this.wisp.x;
       const pullY = this.wisp.y;
       this.tweens.add({
@@ -660,9 +961,23 @@ export class LevelScene extends Phaser.Scene {
         ease: "Cubic.easeIn",
         onComplete: () => mote.destroy(),
       });
-      this.collectionImpact();
-      this.grow();
+      this.takeMote();
     }
+  }
+
+  /**
+   * One mote becomes yours - the single place a collect is counted, whether it
+   * was walked into or reached for. Every mote feeds the reach back, which is
+   * what makes a press that catches three worth its cost and a press that
+   * catches one a small, deliberate loss.
+   */
+  private takeMote(): void {
+    this.collected += 1;
+    this.advanceChain();
+    this.ambience.chime(this.collected, this.chainState.count);
+    this.setReach(this.reach + REACH_PER_MOTE);
+    this.collectionImpact();
+    this.grow();
   }
 
   private advanceChain(): void {
@@ -672,6 +987,8 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private clearChainDisplay(): void {
+    this.tweens.killTweensOf(this.chainText);
+    this.chainText.setAlpha(1);
     this.chainText.setText("");
     this.chainArc.clear();
   }
@@ -682,7 +999,12 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private collectionImpact(): void {
-    this.cameras.main.shake(65 + this.chainState.count * 12, 0.0009 + this.chainState.count * 0.00018);
+    // Rate-limited: a gathered cascade lands four collects inside a quarter
+    // second and four overlapping shakes read as a rattle, not as impact.
+    if (this.time.now - this.lastShakeAt > 120) {
+      this.lastShakeAt = this.time.now;
+      this.cameras.main.shake(65 + this.chainState.count * 12, 0.0009 + this.chainState.count * 0.00018);
+    }
     this.trail.explode(14 + this.chainState.count * 4, this.wisp.x, this.wisp.y);
     const ring = this.add.circle(this.wisp.x, this.wisp.y, 22, 0xffdfa0, 0)
       .setStrokeStyle(2 + this.chainState.count * 0.35, 0xffdfa0, 0.72).setDepth(7);
@@ -706,8 +1028,12 @@ export class LevelScene extends Phaser.Scene {
       affected += 1;
     }
     this.ambience.radiance();
-    this.cameras.main.shake(260, 0.004);
-    this.cameras.main.flash(170, 255, 222, 160);
+    // No camera flash. A full-screen cream wash is the one effect that can
+    // undo the whole art direction in 170ms, and with the reach filling a
+    // chain in a single press it was firing several times a level - the
+    // screenshot of this game at its best moment was a blank yellow rectangle.
+    // The wave and the shadows going quiet say it without blinding anyone.
+    this.cameras.main.shake(150, 0.0022);
     const wave = this.add.circle(this.wisp.x, this.wisp.y, 32, 0xffe2a8, 0.08)
       .setStrokeStyle(5, 0xffe2a8, 0.92).setDepth(8);
     this.tweens.add({
@@ -718,7 +1044,15 @@ export class LevelScene extends Phaser.Scene {
       ease: "Cubic.easeOut",
       onComplete: () => wave.destroy(),
     });
-    this.chainText.setText(affected > 0 ? "RADIANCE · SHADOWS SLOWED" : "RADIANCE");
+    // Says its piece and goes. Left to the chain's own expiry it sat in the
+    // corner for the full four-second window, which on a contact sheet is six
+    // frames in a row of a game that is meant to be quiet.
+    this.chainText.setText(affected > 0 ? "shadows slowed" : "");
+    this.tweens.killTweensOf(this.chainText);
+    this.chainText.setAlpha(1);
+    if (affected > 0) {
+      this.tweens.add({ targets: this.chainText, alpha: 0, duration: 500, delay: 1100 });
+    }
   }
 
   private drawChainBoundary(time: number): void {
@@ -730,7 +1064,8 @@ export class LevelScene extends Phaser.Scene {
     this.chainArc.beginPath();
     this.chainArc.arc(VIEW_WIDTH - 43, 64, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
     this.chainArc.strokePath();
-    if (this.chainState.count < CHAIN_CAP) this.chainText.setText(`LUMEN ${this.chainState.count}/${CHAIN_CAP}`);
+    // The arc is the whole readout - a filling ring in the corner, no number to
+    // read. The words are kept for the one moment they mean something.
   }
 
   /** How many motes open the beacon this level (defensively never above what was actually placed). */
@@ -739,9 +1074,6 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private grow(): void {
-    this.wispLight.radius = 347 + this.collected * 20;
-    this.wisp.setScale(0.5 + this.collected * 0.018);
-
     const required = this.requiredMotes();
     const progress = Phaser.Math.Clamp(this.collected / required, 0, 1);
     this.beacon.setAlpha(0.05 + progress * 0.8);
@@ -821,7 +1153,19 @@ export class LevelScene extends Phaser.Scene {
     this.locked = true;
     this.resets += 1;
     this.ambience.hit();
-    this.cameras.main.flash(220, 40, 10, 60);
+    // The dark closes over you. A camera flash - even a violet one - answers
+    // "your light just went out" by turning the whole screen ON, which is
+    // exactly backwards in this game and reads as a rendering fault at 720p.
+    this.tweens.killTweensOf(this.deathVeil);
+    this.deathVeil.setAlpha(0);
+    this.tweens.add({
+      targets: this.deathVeil,
+      alpha: { from: 0, to: 0.82 },
+      duration: 200,
+      yoyo: true,
+      hold: 190,
+      ease: "Sine.easeOut",
+    });
     this.cameras.main.shake(220, 0.006);
 
     this.tweens.add({
@@ -832,30 +1176,27 @@ export class LevelScene extends Phaser.Scene {
       ease: "Quad.easeIn",
     });
     this.wisp.setScale(0.2);
+    this.reachRing.clear();
+    for (const mote of this.incoming) this.tweens.killTweensOf(mote);
     this.resetChain();
 
     this.after(560, () => {
       this.target.set(START_X, START_Y);
       this.wisp.setPosition(START_X, START_Y);
       this.wispLight.setPosition(START_X, START_Y);
-      this.wisp.setScale(0.5);
-      // Restore the light itself too - the snuff tween shrank its radius, and
-      // nothing else resets it until the next collect. A respawned light
-      // should match a fresh spawn at zero motes, not stay snuffed-small.
+      // What a shadow takes is your light, not your work. The old fail wiped
+      // the level's motes and started it again, which at twenty seconds in is
+      // the moment a player stops playing - and it punished the one thing the
+      // round wants them doing, which is going near a shadow to reach past it.
+      // Now the sting is the reach itself: it is snuffed to the floor and only
+      // motes bring it back, so a death late in a level means finishing that
+      // level nearly blind, walking back across ground you already lit. Same
+      // currency as the press, so there is one number in the game and dying,
+      // spending and collecting all speak it.
       this.tweens.killTweensOf(this.wispLight);
-      this.wispLight.radius = 347;
+      this.setReach(REACH_MIN);
       this.wispLight.intensity = this.baseIntensity();
-      this.collected = 0;
-      this.levelClear = false;
-      this.flawlessNow = false;
-      this.beacon.setAlpha(0.05);
-      this.beaconLight.intensity = 0;
-      this.beaconLight.setColor(0xffcf8a);
-      this.tweens.killTweensOf(this.beacon);
-      this.beacon.setScale(1);
-      this.tweens.killTweensOf(this.openLine);
-      this.openLine.setAlpha(0);
-      this.spawnMotes();
+      this.gatherReadyAt = 0;
       this.updateHud();
       this.reportState();
       this.graceUntil = this.time.now + RESPAWN_GRACE_MS;
@@ -868,12 +1209,48 @@ export class LevelScene extends Phaser.Scene {
     const wasFlawless = this.collected >= this.totalMotes;
     const flawless = this.flawlessLevels + (wasFlawless ? 1 : 0);
     this.ambience.levelComplete(wasFlawless);
-    this.cameras.main.flash(280, 255, 232, 190);
+    // The arrival is a swell, not a switch. A camera flash paints the frame
+    // solid at full alpha before it fades, so the one frame in three that a
+    // contact sheet catches of this game's best moment was a cream rectangle -
+    // the same fault as the old radiance flash and the old death flash. An
+    // additive veil to 0.42 and a beacon that blooms says "you made it" while
+    // the forest is still visible behind it.
+    this.tweens.killTweensOf(this.arrivalVeil);
+    this.arrivalVeil.setAlpha(0);
+    this.tweens.add({
+      targets: this.arrivalVeil,
+      alpha: { from: 0, to: 0.42 },
+      duration: 200,
+      yoyo: true,
+      hold: 90,
+      ease: "Sine.easeOut",
+    });
+    // beaconPulse() leaves an infinite yoyo running on the same property.
+    this.tweens.killTweensOf(this.beacon);
+    this.tweens.add({
+      targets: this.beacon,
+      scale: { from: this.beacon.scale, to: this.beacon.scale * 1.8 },
+      duration: 520,
+      ease: "Cubic.easeOut",
+    });
+    this.tweens.add({
+      targets: this.beaconLight,
+      intensity: 3.4,
+      radius: 520,
+      duration: 420,
+      ease: "Cubic.easeOut",
+    });
     this.cameras.main.fadeOut(520, 8, 7, 14);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const next = this.config.index + 1;
       if (levelFor(next)) {
-        this.scene.start("level", { levelIndex: next, ambience: this.ambience, resets: this.resets, flawless });
+        this.scene.start("level", {
+          levelIndex: next,
+          ambience: this.ambience,
+          resets: this.resets,
+          flawless,
+          taught: this.taught,
+        });
       } else {
         this.scene.start("ending", { ambience: this.ambience, resets: this.resets, flawless });
       }
@@ -911,6 +1288,8 @@ export class LevelScene extends Phaser.Scene {
       wispY: Math.round(this.wisp.y),
       motes: this.motes.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y) })),
       hazards: this.hazards.map((h) => ({ x: Math.round(h.img.x), y: Math.round(h.img.y) })),
+      reach: Math.round(this.reach),
+      gathers: this.gathers,
       chain: this.chainState.count,
       chainRemainingMs: Math.max(0, Math.round(this.chainState.deadline - this.time.now)),
       radianceWaves: this.chainState.waves,
