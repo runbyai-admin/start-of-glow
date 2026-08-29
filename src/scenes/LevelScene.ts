@@ -55,16 +55,17 @@ const RADIANCE_TIME_SCALE = 0.42;
  * and pulling spends it. Press (click, tap or space) and every mote inside the
  * lit circle comes to you; the circle shrinks by GATHER_COST whether or not it
  * catches anything, and every mote you take - by reaching or by touching - puts
- * REACH_PER_MOTE back. Three in one reach roughly pays for itself, one does not,
- * so the interesting press is the one that takes the mote you could not safely
- * walk to. The lit radius IS the rule: there is nothing to read, you can see how
+ * REACH_PER_MOTE back. Even a full armful gives back less than the press cost,
+ * so reaching is never the cheap way to farm light - it is what you spend light
+ * on to take the mote you could not safely walk to, or to take four at once
+ * before a shadow arrives. Walking into motes is what makes you bright again. The lit radius IS the rule: there is nothing to read, you can see how
  * far you can reach because that is exactly as far as you can see.
  */
-const REACH_START = 340;
-const REACH_MIN = 150;
-const REACH_MAX = 470;
-const REACH_PER_MOTE = 30;
-const GATHER_COST = 130;
+const REACH_START = 400;
+const REACH_MIN = 170;
+const REACH_MAX = 520;
+const REACH_PER_MOTE = 32;
+const GATHER_COST = 170;
 const GATHER_COOLDOWN_MS = 420;
 /** Per-mote stagger on the way in - the cascade is the reward, so it is heard as notes, not a chord. */
 const GATHER_MAX_MOTES = 4;
@@ -131,6 +132,7 @@ export class LevelScene extends Phaser.Scene {
   private reachRing!: Phaser.GameObjects.Graphics;
   private reachLine?: Phaser.GameObjects.Text;
   private inviteAt = 0;
+  private lastShakeAt = 0;
   private inviteShown = 0;
   private incoming: Phaser.GameObjects.Image[] = [];
 
@@ -742,8 +744,11 @@ export class LevelScene extends Phaser.Scene {
   private absorb(mote: Phaser.GameObjects.Image): void {
     const index = this.incoming.indexOf(mote);
     if (index >= 0) this.incoming.splice(index, 1);
-    this.trail.explode(16, this.wisp.x, this.wisp.y);
     mote.destroy();
+    // A shadow caught the wisp while this one was still in flight: the light
+    // that snuffed the run does not get to bank the mote that was on its way.
+    if (this.locked) return;
+    this.trail.explode(16, this.wisp.x, this.wisp.y);
     this.takeMote();
   }
 
@@ -767,8 +772,8 @@ export class LevelScene extends Phaser.Scene {
     const ready = this.time.now >= this.gatherReadyAt;
     // Untaught players get a slow breathing edge the first time something is in
     // range; once they have pressed once the ring settles down and stops asking.
-    const invite = inReach && !this.taught ? 0.16 + Math.sin(time * 0.006) * 0.1 : 0;
-    const alpha = (inReach ? (ready ? 0.26 : 0.12) : 0.07) + invite;
+    const invite = inReach && !this.taught ? 0.18 + Math.sin(time * 0.006) * 0.12 : 0;
+    const alpha = (inReach ? (ready ? 0.34 : 0.13) : 0.06) + invite;
     this.reachRing.lineStyle(inReach ? 2 : 1, inReach ? 0xffe2a8 : 0x8fb4d8, alpha);
     this.reachRing.strokeCircle(this.wisp.x, this.wisp.y, this.reach);
 
@@ -777,7 +782,7 @@ export class LevelScene extends Phaser.Scene {
     for (const mote of this.motes) {
       const d = Phaser.Math.Distance.Between(mote.x, mote.y, this.wisp.x, this.wisp.y);
       if (d > this.reach) continue;
-      this.reachRing.lineStyle(1, 0xffe2a8, 0.1 + 0.16 * (1 - d / this.reach));
+      this.reachRing.lineStyle(1, 0xffe2a8, 0.16 + 0.26 * (1 - d / this.reach));
       this.reachRing.lineBetween(this.wisp.x, this.wisp.y, mote.x, mote.y);
     }
   }
@@ -930,7 +935,12 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private collectionImpact(): void {
-    this.cameras.main.shake(65 + this.chainState.count * 12, 0.0009 + this.chainState.count * 0.00018);
+    // Rate-limited: a gathered cascade lands four collects inside a quarter
+    // second and four overlapping shakes read as a rattle, not as impact.
+    if (this.time.now - this.lastShakeAt > 120) {
+      this.lastShakeAt = this.time.now;
+      this.cameras.main.shake(65 + this.chainState.count * 12, 0.0009 + this.chainState.count * 0.00018);
+    }
     this.trail.explode(14 + this.chainState.count * 4, this.wisp.x, this.wisp.y);
     const ring = this.add.circle(this.wisp.x, this.wisp.y, 22, 0xffdfa0, 0)
       .setStrokeStyle(2 + this.chainState.count * 0.35, 0xffdfa0, 0.72).setDepth(7);
@@ -954,8 +964,12 @@ export class LevelScene extends Phaser.Scene {
       affected += 1;
     }
     this.ambience.radiance();
-    this.cameras.main.shake(260, 0.004);
-    this.cameras.main.flash(170, 255, 222, 160);
+    // No camera flash. A full-screen cream wash is the one effect that can
+    // undo the whole art direction in 170ms, and with the reach filling a
+    // chain in a single press it was firing several times a level - the
+    // screenshot of this game at its best moment was a blank yellow rectangle.
+    // The wave and the shadows going quiet say it without blinding anyone.
+    this.cameras.main.shake(150, 0.0022);
     const wave = this.add.circle(this.wisp.x, this.wisp.y, 32, 0xffe2a8, 0.08)
       .setStrokeStyle(5, 0xffe2a8, 0.92).setDepth(8);
     this.tweens.add({
@@ -966,7 +980,7 @@ export class LevelScene extends Phaser.Scene {
       ease: "Cubic.easeOut",
       onComplete: () => wave.destroy(),
     });
-    this.chainText.setText(affected > 0 ? "RADIANCE · SHADOWS SLOWED" : "RADIANCE");
+    this.chainText.setText(affected > 0 ? "shadows slowed" : "");
   }
 
   private drawChainBoundary(time: number): void {
@@ -978,7 +992,8 @@ export class LevelScene extends Phaser.Scene {
     this.chainArc.beginPath();
     this.chainArc.arc(VIEW_WIDTH - 43, 64, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
     this.chainArc.strokePath();
-    if (this.chainState.count < CHAIN_CAP) this.chainText.setText(`LUMEN ${this.chainState.count}/${CHAIN_CAP}`);
+    // The arc is the whole readout - a filling ring in the corner, no number to
+    // read. The words are kept for the one moment they mean something.
   }
 
   /** How many motes open the beacon this level (defensively never above what was actually placed). */
@@ -1078,6 +1093,7 @@ export class LevelScene extends Phaser.Scene {
     });
     this.wisp.setScale(0.2);
     this.reachRing.clear();
+    for (const mote of this.incoming) this.tweens.killTweensOf(mote);
     this.resetChain();
 
     this.after(560, () => {
