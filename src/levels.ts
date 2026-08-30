@@ -90,6 +90,61 @@ const LEVEL_1_LAYOUT: LevelLayout = {
   ],
 };
 
+/**
+ * Level 2 is the first place a careful route should become deliberate, not
+ * arbitrary. The old seeded layout sometimes sent the cautious path through a
+ * shadow near world (955, 241) on a repeat loop. This composed layout keeps a
+ * broad S of thirteen motes at least 200px from every patrol segment, ending at
+ * the beacon, while five optional motes sit inside the four shadow pockets.
+ * The safe route teaches reading lanes; the pockets keep greed dangerous.
+ */
+export const LEVEL_2_LAYOUT: LevelLayout = {
+  motes: [
+    // Safe corridor: low through the first half, then rising toward the beacon.
+    { x: 340, y: 450 },
+    { x: 480, y: 500 },
+    { x: 620, y: 520 },
+    { x: 780, y: 490 },
+    { x: 900, y: 400 },
+    { x: 1040, y: 340 },
+    { x: 1180, y: 300 },
+    { x: 1320, y: 320 },
+    { x: 1480, y: 380 },
+    { x: 1640, y: 420 },
+    { x: 1800, y: 380 },
+    { x: 1980, y: 290 },
+    { x: 2180, y: 270 },
+    // Optional pockets: one or two pieces of light inside each patrol.
+    { x: 640, y: 150 },
+    { x: 1120, y: 600 },
+    { x: 1550, y: 145 },
+    { x: 1710, y: 150 },
+    { x: 2100, y: 580 },
+  ],
+  hazards: [
+    [
+      { x: 480, y: 110 },
+      { x: 800, y: 120 },
+      { x: 640, y: 220 },
+    ],
+    [
+      { x: 980, y: 630 },
+      { x: 1340, y: 630 },
+      { x: 1150, y: 560 },
+    ],
+    [
+      { x: 1430, y: 90 },
+      { x: 1820, y: 100 },
+      { x: 1620, y: 205 },
+    ],
+    [
+      { x: 1840, y: 630 },
+      { x: 2310, y: 620 },
+      { x: 2100, y: 510 },
+    ],
+  ],
+};
+
 export const LEVELS: LevelConfig[] = [
   {
     index: 1,
@@ -101,7 +156,16 @@ export const LEVELS: LevelConfig[] = [
     mood: "dusk",
     layout: LEVEL_1_LAYOUT,
   },
-  { index: 2, name: "Where the Trees Close In", moteCount: 18, requiredMotes: 13, hazardCount: 4, hazardSpeed: 95, mood: "deep-night" },
+  {
+    index: 2,
+    name: "Where the Trees Close In",
+    moteCount: 18,
+    requiredMotes: 13,
+    hazardCount: 4,
+    hazardSpeed: 95,
+    mood: "deep-night",
+    layout: LEVEL_2_LAYOUT,
+  },
   { index: 3, name: "The Last Clearing", moteCount: 22, requiredMotes: 16, hazardCount: 6, hazardSpeed: 120, mood: "storm-dark" },
 ];
 
