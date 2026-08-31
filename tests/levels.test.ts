@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LEVEL_2_LAYOUT, LEVEL_3_LAYOUT, type LevelLayout } from "../src/levels.ts";
+import { LEVEL_1_LAYOUT, LEVEL_2_LAYOUT, LEVEL_3_LAYOUT, type LevelLayout } from "../src/levels.ts";
 
 function distanceToSegment(
   point: { x: number; y: number },
@@ -76,6 +76,10 @@ test("level 2 has a thirteen-mote safe corridor and five shadow-pocket choices",
   assertRouteContract(LEVEL_2_LAYOUT, 13, 5, 4);
 });
 
-test("level 3 has a sixteen-mote safe clearing and six storm-pocket choices", () => {
+test("level 1 keeps ten required motes safe and four pull-pocket choices risky", () => {
+  assertRouteContract(LEVEL_1_LAYOUT, 10, 4, 2);
+});
+
+test("level 3 has a sixteen-mote safe detour and six paid-gate choices", () => {
   assertRouteContract(LEVEL_3_LAYOUT, 16, 6, 6);
 });

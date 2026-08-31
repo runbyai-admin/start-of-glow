@@ -36,56 +36,40 @@ export interface LevelConfig {
 }
 
 /**
- * Level 1, hand-composed rather than seeded: the judged first minute looks at
- * this space. Reading left to right (start x=220, beacon x=2202):
- * - an opening arc of four safe motes teaches collection in the first seconds;
- * - a lone vertical sentry patrols the midfield gap at x=900, so the player
- *   *sees* the threat crossing their path before they must cross it;
- * - one greedy mote sits just below the sentry's turnaround - the first
- *   optional risk;
- * - a calm mid-glade breathes, then a second hazard circles the beacon
- *   approach with two greedy motes inside its circuit and a safe low road
- *   under it.
- * Nine motes are safely reachable, two more need one timed lane-crossing,
- * three sit in guarded pockets; ten open the beacon, so a careful player
- * clears without ever braving a pocket and a flawless run braves both.
+ * Level 1 is the pull/cost lesson, so mandatory progress never asks for a
+ * second mechanic. Ten lights make one calm route to the beacon. Two pairs of
+ * optional lights sit in top and bottom shadow pockets, near enough to buy
+ * with a full reach and dangerous to chase after that reach is spent.
  */
-const LEVEL_1_LAYOUT: LevelLayout = {
+export const LEVEL_1_LAYOUT: LevelLayout = {
   motes: [
-    // opening arc - safe, rising toward the first treeline
+    // Required opening route: always at least 200px from either patrol.
     { x: 330, y: 430 },
-    { x: 430, y: 355 },
-    { x: 545, y: 305 },
-    { x: 665, y: 290 },
-    // a dip toward the sentry lane - still safe, sets up the crossing
-    { x: 780, y: 510 },
-    // just past the lane, high and low - crossing the patrol is the lesson
-    { x: 990, y: 240 },
-    { x: 1010, y: 540 },
-    // greed pocket A - just below the sentry's lowest turnaround
-    { x: 900, y: 635 },
-    // mid glade - safe breathers along a gentle S
-    { x: 1160, y: 380 },
-    { x: 1320, y: 300 },
-    { x: 1520, y: 430 },
-    // greed pocket B - inside the beacon-approach circuit
-    { x: 1985, y: 415 },
-    { x: 2090, y: 295 },
-    // the safe low road under the beacon
-    { x: 2280, y: 585 },
+    { x: 480, y: 460 },
+    { x: 630, y: 450 },
+    { x: 780, y: 420 },
+    { x: 930, y: 370 },
+    { x: 1100, y: 330 },
+    { x: 1280, y: 310 },
+    { x: 1500, y: 300 },
+    { x: 1800, y: 280 },
+    { x: 2150, y: 260 },
+    // Optional paid light: two motes inside each patrol pocket.
+    { x: 760, y: 120 },
+    { x: 840, y: 140 },
+    { x: 1650, y: 600 },
+    { x: 1780, y: 610 },
   ],
   hazards: [
-    // the sentry: a pure vertical lane guarding the midfield gap
     [
-      { x: 900, y: 160 },
-      { x: 900, y: 600 },
-      { x: 900, y: 380 },
+      { x: 600, y: 80 },
+      { x: 1000, y: 90 },
+      { x: 800, y: 190 },
     ],
-    // the circuit: a broad triangle in front of the beacon approach
     [
-      { x: 1880, y: 240 },
-      { x: 2120, y: 480 },
-      { x: 1760, y: 490 },
+      { x: 1450, y: 650 },
+      { x: 1950, y: 650 },
+      { x: 1700, y: 550 },
     ],
   ],
 };
@@ -172,12 +156,12 @@ export const LEVEL_3_LAYOUT: LevelLayout = {
     { x: 1800, y: 620 },
     { x: 2180, y: 600 },
     // Paid shortcuts: visible inside the paired patrols, safe only at range.
-    { x: 420, y: 340 },
-    { x: 500, y: 380 },
-    { x: 1120, y: 340 },
-    { x: 1200, y: 380 },
-    { x: 1820, y: 340 },
-    { x: 1900, y: 380 },
+    { x: 400, y: 240 },
+    { x: 500, y: 480 },
+    { x: 1100, y: 240 },
+    { x: 1200, y: 480 },
+    { x: 1800, y: 240 },
+    { x: 1900, y: 480 },
   ],
   hazards: [
     [
