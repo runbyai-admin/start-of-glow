@@ -10,7 +10,17 @@ import {
 import type { Ambience } from "../audio";
 import { levelFor, LEVELS, type LevelConfig } from "../levels";
 import { VIEW_HEIGHT, VIEW_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from "./dimensions";
-import { advanceChain, CHAIN_CAP, CHAIN_WINDOW_MS, emptyChain, expireChain, resetChain, type ChainState } from "../chain";
+import { advanceChain, chainActiveForLevel, CHAIN_CAP, CHAIN_WINDOW_MS, emptyChain, expireChain, resetChain, type ChainState } from "../chain";
+import {
+  REACH_MAX,
+  REACH_MIN,
+  REACH_START,
+  reachReadiness,
+  reachReady,
+  restoreReach,
+  spendReach,
+  type MoteArrival,
+} from "../reach";
 
 const COLLECT_RADIUS = 45;
 const HAZARD_RADIUS = 34;
@@ -54,20 +64,14 @@ const RADIANCE_TIME_SCALE = 0.42;
 /**
  * The reach. This round's one verb: your glow is how far you can pull light in,
  * and pulling spends it. Press (click, tap or space) and every mote inside the
- * lit circle comes to you; the circle shrinks by GATHER_COST whether or not it
- * catches anything, and every mote you take - by reaching or by touching - puts
- * REACH_PER_MOTE back. Even a full armful gives back less than the press cost,
- * so reaching is never the cheap way to farm light - it is what you spend light
- * on to take the mote you could not safely walk to, or to take four at once
- * before a shadow arrives. Walking into motes is what makes you bright again.
+ * lit circle comes to you. A pull burns a full glow to its floor, and light
+ * carried in by the pull gives back only a glimmer. Walking through five motes
+ * rekindles a four-mote reach; until then the press is visibly spent. That makes
+ * reaching a choice about which cluster is worth going dark for, rather than a
+ * button whose own reward immediately buys another press.
  * The lit radius IS the rule: nothing to read, because you can see exactly as
  * far as you can reach.
  */
-const REACH_START = 390;
-const REACH_MIN = 170;
-const REACH_MAX = 470;
-const REACH_PER_MOTE = 32;
-const GATHER_COST = 170;
 const GATHER_COOLDOWN_MS = 420;
 /** A reach takes an armful, not a room; the rest stays on the ground. */
 const GATHER_MAX_MOTES = 4;
@@ -152,6 +156,10 @@ export class LevelScene extends Phaser.Scene {
   private reach = REACH_START;
   private gatherReadyAt = 0;
   private gathers = 0;
+  private deniedGathers = 0;
+  private touchedMotes = 0;
+  private gatheredMotes = 0;
+  private costShown = false;
   /** Motes were in reach and the player has not pressed yet - drives the wordless invitation. */
   private taught = false;
   private levelClear = false;
@@ -176,6 +184,10 @@ export class LevelScene extends Phaser.Scene {
     this.reach = REACH_START;
     this.gatherReadyAt = 0;
     this.gathers = 0;
+    this.deniedGathers = 0;
+    this.touchedMotes = 0;
+    this.gatheredMotes = 0;
+    this.costShown = false;
     this.inviteAt = 0;
     this.inviteShown = 0;
     this.gutter = 0;
@@ -702,19 +714,25 @@ export class LevelScene extends Phaser.Scene {
 
   /**
    * The press. Everything inside the lit circle is drawn in, nearest first, and
-   * the circle pays for it. A reach that catches nothing still costs - reaching
-   * into the dark on spec is how you end up small - but the floor at REACH_MIN
-   * means a bad run of presses makes you weak, never stuck.
+   * the circle pays for it. Only a fully kindled glow can reach. The press burns
+   * that glow to its floor whether or not it catches anything; moving through
+   * light, rather than pulling it, is what earns the next reach.
    */
   private gather(): void {
     if (this.locked || this.time.now < this.gatherReadyAt) return;
     this.gatherReadyAt = this.time.now + GATHER_COOLDOWN_MS;
+    if (!reachReady(this.reach)) {
+      this.deniedGathers += 1;
+      this.gatherDenied();
+      this.reportState();
+      return;
+    }
     this.gathers += 1;
     if (!this.taught) {
       this.taught = true;
       if (this.reachLine) {
         this.tweens.killTweensOf(this.reachLine);
-        this.tweens.add({ targets: this.reachLine, alpha: 0, duration: 420 });
+        this.reachLine.setAlpha(0);
       }
     }
 
@@ -737,10 +755,11 @@ export class LevelScene extends Phaser.Scene {
     }
 
     const spent = this.reach;
-    this.setReach(this.reach - GATHER_COST);
+    this.setReach(spendReach(this.reach));
     this.gatherWave(spent, caught.length);
     this.ambience.gather(caught.length);
     this.pulseBoost = caught.length > 0 ? 1.5 : 0.5;
+    this.showGatherCost();
 
     caught.forEach(({ mote, d }, index) => {
       this.tweens.killTweensOf(mote);
@@ -755,6 +774,36 @@ export class LevelScene extends Phaser.Scene {
         ease: "Cubic.easeIn",
         onComplete: () => this.absorb(mote),
       });
+    });
+  }
+
+  /** A spent press answers immediately, but cannot pull or hide its state. */
+  private gatherDenied(): void {
+    this.ambience.gather(0);
+    const ring = this.add
+      .circle(this.wisp.x, this.wisp.y, 42, 0x8fb4d8, 0)
+      .setStrokeStyle(2, 0x8fb4d8, 0.7)
+      .setDepth(8);
+    this.tweens.add({
+      targets: ring,
+      radius: 22,
+      alpha: 0,
+      duration: 260,
+      ease: "Cubic.easeOut",
+      onUpdate: () => ring.setPosition(this.wisp.x, this.wisp.y),
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /** One quiet sentence, once, after the screen has already shown the cost. */
+  private showGatherCost(): void {
+    if (this.costShown || this.config.index !== 1 || !this.reachLine) return;
+    this.costShown = true;
+    this.reachLine.setText("move through light to kindle the reach").setAlpha(0);
+    this.tweens.add({ targets: this.reachLine, alpha: 0.72, duration: 260, ease: "Sine.easeOut" });
+    this.after(1750, () => {
+      if (!this.reachLine) return;
+      this.tweens.add({ targets: this.reachLine, alpha: 0, duration: 520, ease: "Sine.easeIn" });
     });
   }
 
@@ -786,7 +835,7 @@ export class LevelScene extends Phaser.Scene {
     // that snuffed the run does not get to bank the mote that was on its way.
     if (this.locked) return;
     this.trail.explode(16, this.wisp.x, this.wisp.y);
-    this.takeMote();
+    this.takeMote("gathered");
   }
 
   private setReach(next: number): void {
@@ -807,12 +856,29 @@ export class LevelScene extends Phaser.Scene {
       }
     }
     const ready = this.time.now >= this.gatherReadyAt;
+    const kindled = reachReady(this.reach);
+    const readiness = reachReadiness(this.reach);
     // Untaught players get a slow breathing edge the first time something is in
     // range; once they have pressed once the ring settles down and stops asking.
     const invite = inReach && !this.taught ? 0.18 + Math.sin(time * 0.006) * 0.12 : 0;
-    const alpha = (inReach ? (ready ? 0.34 : 0.13) : 0.06) + invite;
-    this.reachRing.lineStyle(inReach ? 2 : 1, inReach ? 0xffe2a8 : 0x8fb4d8, alpha);
+    const alpha = (inReach ? (ready && kindled ? 0.42 : 0.16) : 0.06) + invite;
+    const reachColor = kindled ? 0xffe2a8 : 0x8fb4d8;
+    this.reachRing.lineStyle(inReach ? 2 : 1, reachColor, alpha);
     this.reachRing.strokeCircle(this.wisp.x, this.wisp.y, this.reach);
+
+    // The close halo is the hand-readable resource: complete gold means the
+    // pull is ready; a spent blue arc fills only as the player moves through
+    // light. It lives on the wisp, not in a detached HUD meter.
+    this.reachRing.lineStyle(kindled ? 3.5 : 3, reachColor, kindled ? 0.82 : 0.58);
+    this.reachRing.beginPath();
+    this.reachRing.arc(
+      this.wisp.x,
+      this.wisp.y,
+      38,
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * Math.max(0.025, readiness),
+    );
+    this.reachRing.strokePath();
 
     // A filament to each mote in reach: what the press will take, before it is pressed.
     if (!inReach) return;
@@ -961,23 +1027,49 @@ export class LevelScene extends Phaser.Scene {
         ease: "Cubic.easeIn",
         onComplete: () => mote.destroy(),
       });
-      this.takeMote();
+      this.takeMote("touched");
     }
   }
 
   /**
-   * One mote becomes yours - the single place a collect is counted, whether it
-   * was walked into or reached for. Every mote feeds the reach back, which is
-   * what makes a press that catches three worth its cost and a press that
-   * catches one a small, deliberate loss.
+   * One mote becomes yours. Pulled light returns a glimmer; touched light
+   * rekindles the reach. The difference is the cost of replacing travel with
+   * a press, and is drawn continuously by the halo around the wisp.
    */
-  private takeMote(): void {
+  private takeMote(arrival: MoteArrival): void {
     this.collected += 1;
-    this.advanceChain();
-    this.ambience.chime(this.collected, this.chainState.count);
-    this.setReach(this.reach + REACH_PER_MOTE);
+    // The opening belongs to the pull and its cost. The inherited five-light
+    // chain is a useful escalation later, but its corner timer and radiance
+    // wave would introduce a second resource inside the first ten seconds.
+    // The final clearing earns that extra layer; the first two levels keep the
+    // chain completely quiet even for a reacher who clears level 1 in six seconds.
+    const chainActive = chainActiveForLevel(this.config.index);
+    if (chainActive) this.advanceChain();
+    this.ambience.chime(this.collected, chainActive ? this.chainState.count : 1);
+    const wasReady = reachReady(this.reach);
+    this.setReach(restoreReach(this.reach, arrival));
+    if (arrival === "touched") this.touchedMotes += 1;
+    else this.gatheredMotes += 1;
+    if (!wasReady && reachReady(this.reach)) this.kindleReach();
     this.collectionImpact();
     this.grow();
+  }
+
+  /** Completing the close halo gets one restrained world-space bloom. */
+  private kindleReach(): void {
+    const ring = this.add
+      .circle(this.wisp.x, this.wisp.y, 38, 0xffe2a8, 0)
+      .setStrokeStyle(3, 0xffe2a8, 0.86)
+      .setDepth(8);
+    this.tweens.add({
+      targets: ring,
+      radius: 92,
+      alpha: 0,
+      duration: 480,
+      ease: "Quad.easeOut",
+      onUpdate: () => ring.setPosition(this.wisp.x, this.wisp.y),
+      onComplete: () => ring.destroy(),
+    });
   }
 
   private advanceChain(): void {
@@ -1290,6 +1382,10 @@ export class LevelScene extends Phaser.Scene {
       hazards: this.hazards.map((h) => ({ x: Math.round(h.img.x), y: Math.round(h.img.y) })),
       reach: Math.round(this.reach),
       gathers: this.gathers,
+      gatherReady: reachReady(this.reach),
+      deniedGathers: this.deniedGathers,
+      touchedMotes: this.touchedMotes,
+      gatheredMotes: this.gatheredMotes,
       chain: this.chainState.count,
       chainRemainingMs: Math.max(0, Math.round(this.chainState.deadline - this.time.now)),
       radianceWaves: this.chainState.waves,

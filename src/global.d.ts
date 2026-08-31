@@ -26,6 +26,11 @@ interface GlowTestState {
   reach?: number;
   /** Presses of the gather this level attempt. */
   gathers?: number;
+  /** Whether the wisp is fully kindled and can pay for another gather. */
+  gatherReady?: boolean;
+  deniedGathers?: number;
+  touchedMotes?: number;
+  gatheredMotes?: number;
   /** Visible lumen-chain state; zero outside an active chain. */
   chain?: number;
   chainRemainingMs?: number;
