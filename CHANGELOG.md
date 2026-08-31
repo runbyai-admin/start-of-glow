@@ -2,6 +2,42 @@
 
 One entry per round, written by that round's winner as part of banking the win: what changed and why, in enough detail that the other two contestants can pick it up tomorrow.
 
+## Round 4 - OpenAI (the pull has a price, 2026-08-31)
+
+The brief was to make every press a visible choice with a felt cost in the first ten seconds, and to add no new opening mechanic.
+The owner's verdict: "openai was the only one where spending reach and refilling it felt like a decision."
+
+**A pull spends the whole glow, and only travel earns it back.** `src/reach.ts` is now the one place that knows the economy.
+Pressing requires a fully kindled glow (`reach >= REACH_READY`, 390) and burns it straight to the floor (170) whether or not it caught anything.
+Light comes back asymmetrically: 36 for a mote you walked through, 10 for one the pull carried in.
+A press therefore cannot pay for itself - four pulled motes leave you at 210, still spent - and five motes walked through is what buys the next pull.
+Round 3's version returned 32 per mote against a 170 cost, which read as a slow drain rather than a decision; this one asks a question every time the circle is full.
+
+**The resource is a halo on the wisp, not a meter in a corner.** A 38px arc around the wisp fills with `reachReadiness()`: a partial cold blue arc while spent, a complete warm gold circle when the pull is ready, and the outer reach ring takes the same two colours.
+`kindleReach()` blooms one gold ring at the moment it completes, so the state change has a sound and a shape rather than only a value.
+A press made while spent is answered, not swallowed: a cold blue collapsing ring, a dead voice, and a `deniedGathers` counter for the gate.
+Level 1 says it in two lines total - "press · draw the light in", then, once, after the first pull, "move through light to kindle the reach".
+
+**The opening carries one resource.** The lumen chain now starts at level 3 (`chainActiveForLevel`), so levels 1 and 2 have no corner arc, no four-second boundary and no radiance wave.
+Two timers in the first ten seconds is what made the previous opening unreadable; the final clearing is where the extra layer earns its place.
+
+**Levels 2 and 3 are hand-authored.** The seeded generator placed motes without knowing where the patrols went, so a careful route through level 2 could pass inside a shadow's loop through no fault of the player.
+All three levels now carry explicit layouts with the same contract, enforced by `tests/levels.test.ts`: the required motes form a route that clears every patrol segment by 200px, and every optional mote sits within 90px of one.
+Level 3 turns the economy into terrain - three pairs of fast shadows gate the forest, the required route goes the long way around them, and six shortcut motes sit inside the gates where only a full reach can buy them.
+
+`npm test` gained `tests/reach.test.ts` and `tests/levels.test.ts`, and `window.__glow` gained `gatherReady`, `deniedGathers`, `touchedMotes` and `gatheredMotes` - enough for a persona gate to tell a pull apart from a walk.
+
+### What else was tried
+
+**Claude - the price you can see before you pay it.** The same diagnosis, a different readout: the colour of the light told you whether a press was affordable, the cost was shown before it was charged, and a death returned the wisp where it fell rather than at the level's door.
+It also cut level 3 for being long rather than hard.
+Then it stopped: two attempts at replacing the seeded level layouts were tried and thrown away as negative results, and the slot was deliberately left on the 00:33 UTC build for the rest of the round.
+The owner played it out and found nothing to keep - "it was just weird, like not that much of improvement".
+
+**Grok - the clock on the spent radius.** A press spent 200 and started a two-second gold clock drawn on the radius you had just spent, pulled motes stopped refunding light, a dead press was audible, and the menu dive came down to 180ms so the first frame is the forest rather than a title going dark.
+Eighteen deploys in the round, most of them 100-200ms presentation adjustments.
+The owner watched the clock refill, played it out, and kept nothing: waiting for a cooldown is not the same decision as choosing what to spend a finite glow on.
+
 ## Round 3 - Claude (the reach, 2026-08-29)
 
 The round's brief was mechanics and nothing else: one clear thing you do with the light, good in the hands inside ten seconds, no new menus or modes.

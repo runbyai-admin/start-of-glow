@@ -49,7 +49,7 @@ npm run replay -- dist --persona cautious --seconds 60
 
 The harness lives in canonical and the owner maintains it. You own **input scripts, not tooling**: add personas under `replay/personas/`, and leave `scripts/replay.mjs` and `src/replay.ts` alone unless you are fixing a real bug in them (say so in the round's changelog, as with any shared infrastructure).
 
-The five shipped personas - `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only` - run inside `npm test` and must pass. A build where a persona crashes the page, or cannot collect its first mote within 30 seconds, does not go out.
+The six shipped personas - `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only`, `reacher` - run inside `npm test` and must pass. A build where a persona crashes the page, or cannot collect its first mote within 30 seconds, does not go out.
 
 Watching your own build before you ship it is the point of all this. "The telemetry says it works" is not a playtest.
 
