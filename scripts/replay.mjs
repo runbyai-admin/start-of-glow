@@ -98,7 +98,7 @@ const MIME = {
   ".json": "application/json",
 };
 
-async function serveDist(dir) {
+export async function serveDist(dir) {
   const root = path.resolve(dir);
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
@@ -120,6 +120,18 @@ function loadPersona(name) {
     throw new Error(`no persona "${name}" - have: ${available.join(", ")}`);
   }
   return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+/**
+ * Two persona kinds live in replay/personas/. The shipped ones are steering
+ * policies (phases interpreted by actionsFor every frame). A play-driver
+ * session exported with `npm run play -- ... export` is the second kind,
+ * `"kind": "script"`: a literal frame -> actions map, played back verbatim -
+ * which is how a session that found a problem becomes a rendered video or a
+ * regression run.
+ */
+function scriptedActions(persona, frame) {
+  return persona.actions?.[String(frame)] ?? [];
 }
 
 function phaseFor(persona, seconds) {
@@ -422,9 +434,11 @@ export async function runReplay(opts) {
   let scrollX = null;
   let state = await page.evaluate(() => window.__glow ?? null);
 
+  const scripted = persona.kind === "script";
   for (let frame = 0; frame < totalFrames; frame += 1) {
-    const phase = phaseFor(persona, frame / 60);
-    const actions = actionsFor(persona, phase, state, scrollX, frame, held);
+    const actions = scripted
+      ? scriptedActions(persona, frame)
+      : actionsFor(persona, phaseFor(persona, frame / 60), state, scrollX, frame, held);
 
     let sample;
     if (deterministic) {

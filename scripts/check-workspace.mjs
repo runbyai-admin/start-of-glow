@@ -46,7 +46,7 @@ const FORBIDDEN_PATTERNS = [
   { re: /(^|\/)id_(rsa|ed25519|ecdsa)(\.pub)?$/i, why: "ssh key" },
 ];
 
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "test-results", "playwright-report"]);
+const SKIP_DIRS = new Set([".git", "node_modules", "dist", "test-results", "playwright-report", ".play"]);
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {

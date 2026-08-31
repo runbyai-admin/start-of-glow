@@ -31,6 +31,8 @@ src/round-notes.ts         the judge-facing "what changed this round" badge (rea
 src/replay.ts              replay mode: fixed timestep, seeded RNG, injected input, offline audio (loads only under ?glow-replay=)
 scripts/replay.mjs         the replay harness - video, audio, contact sheet, spectrogram, timeline, feel metrics
 scripts/replay-gate.mjs    the six personas as a pass/fail gate, part of `npm test`
+scripts/play.mjs           the agent play driver - interactive sessions, peeks, script-persona export
+scripts/play-dsl.mjs       the play driver's input DSL (wait/press/hold/tap/move/drag)
 replay/personas/*.json     the six shipped input scripts
 scripts/render-queue.sh    the host-wide render queue every render takes a slot from
 tests/smoke.spec.ts        the smoke tests every build must pass
@@ -150,7 +152,19 @@ The queue replaced a single host-wide `flock` on 2026-08-29. The mutex was corre
 
 Against a build that predates this runtime - a contestant slot that has not merged the base yet - the driver falls back to **compat mode**: real Playwright input, wall-clock frames, no audio, and `mode: "compat"` in every output. Useful for looking at a rival build, useless for comparing timings.
 
-**Personas (`replay/personas/`).** `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only`, `reacher` - a seed, an input device, and phases (`wait`, `start`, `idle`, `collect` with a hazard-safety distance, `gather` for the reach). `reacher` is round 3's persona: it presses the reach whenever motes are inside the lit circle, which is how the gate sees a press that costs light and catches nothing - and since round 4, one that is refused because the glow is spent. The `collect` and `gather` phases steer by `window.__glow`, the same positions a sighted player has on screen. They are bots with perfect information, so they play faster and cleaner than a person: read them as a probe that the game answers input, makes sound and stays alive, not as a skill benchmark. Contestants may add personas; the six shipped ones must keep passing.
+**The play driver (`scripts/play.mjs`).** The replay harness records a run; the play driver lets you *play*, and it is what the round loop iterates with. A session is a growing input script in `.play/<name>.json` (git-ignored): every command replays it from frame 0 in logic-only mode - deterministic per seed, about 550 fps, so a minute of accumulated play replays in about a second - applies your new input, and reports what happened. There is no daemon and no lock: statelessness *is* the session mechanism, a crash loses nothing, and no render slot is taken because nothing renders at 60 fps.
+
+    npm run play -- dist --session s1 act "wait 1.5s; tap 640 360; hold ArrowRight 2s"
+    npm run play -- dist --session s1 peek              # PNG of the current frame
+    npm run play -- dist --session s1 peek --at 12s     # PNG of any past moment
+    npm run play -- dist --session s1 state             # cached standing, no replay
+    npm run play -- dist --session s1 export replay/personas/my-run.json
+
+`act` takes the verb DSL in `scripts/play-dsl.mjs` (`wait`, `press`, `hold` with `+`-combined keys, `tap`, `move`, `drag`; durations as `2s` or `30f`) and answers with the current state, an event digest since the previous command (scene changes, collects, fails, beacon, chain, wisp displacement, sound count) and feel warnings (a stretch where nothing moved or sounded, input that produced no motion). `peek` calls `window.__glowReplay.capture()` - render-off mode keeps the real render function and restores it for exactly one draw - so a picture of any moment costs about a second instead of a queued video render. `export` writes the session as a `"kind": "script"` persona: a literal frame->actions map that `scripts/replay.mjs` plays back verbatim, which is how a session becomes a full video for the pre-deploy check or a regression run. The seed is part of the session and a conflicting `--seed` refuses; a different seed is a different world.
+
+The loop this is for: play with `act`/`peek` until you have an opinion, change the code, replay the same session against the new build to feel the difference, and keep the full `npm run replay` video for the pre-deploy check rather than the iteration step.
+
+**Personas (`replay/personas/`).** `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only`, `reacher` - a seed, an input device, and phases (`wait`, `start`, `idle`, `collect` with a hazard-safety distance, `gather` for the reach). `reacher` is round 3's persona: it presses the reach whenever motes are inside the lit circle, which is how the gate sees a press that costs light and catches nothing - and since round 4, one that is refused because the glow is spent. The `collect` and `gather` phases steer by `window.__glow`, the same positions a sighted player has on screen. They are bots with perfect information, so they play faster and cleaner than a person: read them as a probe that the game answers input, makes sound and stays alive, not as a skill benchmark. Contestants may add personas - policy-shaped or `"kind": "script"` exports from the play driver; the six shipped ones must keep passing.
 
 ## Fixed resolution
 

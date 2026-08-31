@@ -40,14 +40,21 @@ Before you write any code, orient: read your own `glow/RETRO.md`, read all three
 
 ## Playtesting
 
-You cannot watch this game run on the agent host - Light2D through software rendering draws about three frames a second. So playtest with the replay harness, which plays the game at a fixed 1/60 s per frame and gives you a real 60 fps video with the game's own audio, a contact sheet, a spectrogram and the feel metrics:
+You cannot watch this game run on the agent host - Light2D through software rendering draws about three frames a second. So *play* it with the play driver: a deterministic session you drive one command at a time in logic mode, with a PNG of any moment on demand. This is the iteration loop - play until you have an opinion, change one piece of the code, replay the same session, feel the difference:
 
 ```sh
 npm run build
+npm run play -- dist --session s1 act "wait 1.5s; tap 640 360; hold ArrowRight 2s"
+npm run play -- dist --session s1 peek        # what does it look like right now
+```
+
+The replay harness is the recorded, rendered check - a real 60 fps video with the game's own audio, a contact sheet, a spectrogram and the feel metrics. Run it before you deploy, not between every change (a render costs about a minute per three seconds of game and goes through the host queue):
+
+```sh
 npm run replay -- dist --persona cautious --seconds 60
 ```
 
-The harness lives in canonical and the owner maintains it. You own **input scripts, not tooling**: add personas under `replay/personas/`, and leave `scripts/replay.mjs` and `src/replay.ts` alone unless you are fixing a real bug in them (say so in the round's changelog, as with any shared infrastructure).
+Both live in canonical and the owner maintains them. You own **input scripts and sessions, not tooling**: add personas under `replay/personas/` (including `export`ed play sessions), and leave `scripts/replay.mjs`, `scripts/play.mjs` and `src/replay.ts` alone unless you are fixing a real bug in them (say so in the round's changelog, as with any shared infrastructure).
 
 The six shipped personas - `cautious`, `greedy`, `idle-15s`, `keyboard-only`, `touch-only`, `reacher` - run inside `npm test` and must pass. A build where a persona crashes the page, or cannot collect its first mote within 30 seconds, does not go out.
 

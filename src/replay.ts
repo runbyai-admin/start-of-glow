@@ -70,6 +70,13 @@ export interface GlowReplay {
   timeline: ReplayFrameSample[];
   feed(actions: ReplayAction[]): void;
   step(actions?: ReplayAction[]): Promise<ReplayFrameSample>;
+  /**
+   * One real draw of the current frame as a PNG data URL, or null if the draw
+   * failed. In render-off mode the renderer is restored for exactly this one
+   * draw and re-stubbed, which is what makes a sub-second `peek` possible
+   * without paying for 60 fps rendering. Game state does not advance.
+   */
+  capture(): string | null;
   /** Finish the audio render; returns 16-bit mono PCM as base64, or null when audio never started. */
   finishAudio(): Promise<{ sampleRate: number; base64: string } | null>;
 }
@@ -308,6 +315,9 @@ export function installReplay(game: Phaser.Game, request: ReplayRequest): void {
   // loop so it only ever advances from inside step().
   let stepping = false;
   const timeline: ReplayFrameSample[] = [];
+  // The renderer's real render function, kept when render-off mode stubs it so
+  // capture() can restore it for a single draw.
+  let realRender: ((...args: unknown[]) => void) | null = null;
 
   const api: GlowReplay = {
     get seed() {
@@ -360,6 +370,30 @@ export function installReplay(game: Phaser.Game, request: ReplayRequest): void {
       timeline.push(sample);
       return sample;
     },
+    capture(): string | null {
+      try {
+        const renderer = game.renderer as unknown as {
+          render: (...args: unknown[]) => void;
+          preRender: () => void;
+          postRender: () => void;
+        };
+        if (realRender) {
+          // Mirror what Game.step does after update: preRender, every active
+          // scene's draw, postRender - with the real render function in place
+          // for exactly this call.
+          renderer.render = realRender;
+          renderer.preRender();
+          (game.scene as unknown as { render: (r: unknown) => void }).render(game.renderer);
+          renderer.postRender();
+          renderer.render = () => {};
+        }
+        // Same JS tick as the draw, so the WebGL buffer is still valid even
+        // without preserveDrawingBuffer.
+        return game.canvas.toDataURL("image/png");
+      } catch {
+        return null;
+      }
+    },
     finishAudio: () => audio.finish(),
   };
 
@@ -382,8 +416,11 @@ export function installReplay(game: Phaser.Game, request: ReplayRequest): void {
     loop.frame = 0;
     if (request.render === "off") {
       // Logic-only mode for the persona gate: the update loops, tweens and
-      // collision checks all still run, only the draw is skipped.
-      (game.renderer as unknown as { render: () => void }).render = () => {};
+      // collision checks all still run, only the draw is skipped. capture()
+      // restores the kept function for one draw at a time.
+      const renderer = game.renderer as unknown as { render: (...args: unknown[]) => void };
+      realRender = renderer.render.bind(game.renderer);
+      renderer.render = () => {};
     }
     api.ready = true;
     document.body.dataset.glowReplay = "ready";
