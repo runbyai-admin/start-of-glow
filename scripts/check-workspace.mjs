@@ -90,6 +90,33 @@ for (const entry of seen.values()) {
   }
 }
 
+// Round notes: the judge-facing "what changed" panel (src/round-notes.ts)
+// reads public/round-notes.json, and a build whose notes are missing, empty or
+// placeholder text is a build the judge has to guess at - fail it here, not at
+// the judging table.
+try {
+  const { readFileSync } = await import("node:fs");
+  const raw = JSON.parse(readFileSync(resolve(ROOT, "public/round-notes.json"), "utf8"));
+  const notes = Array.isArray(raw.notes) ? raw.notes : null;
+  if (!Number.isInteger(raw.round) || raw.round < 1) {
+    violations.push('public/round-notes.json - "round" must be the round number you are building');
+  }
+  if (!notes || notes.length < 3 || notes.length > 6) {
+    violations.push('public/round-notes.json - "notes" must hold 3 to 6 one-liners on what this round changed');
+  } else {
+    for (const note of notes) {
+      const text = typeof note === "string" ? note.trim() : "";
+      if (text.length === 0 || text.length > 160) {
+        violations.push(`public/round-notes.json - each note is one non-empty line of at most 160 characters (got: ${JSON.stringify(note).slice(0, 60)})`);
+      } else if (/^(\.{3}|todo|tbd|fixme)\b/i.test(text)) {
+        violations.push(`public/round-notes.json - placeholder note "${text}" - write what actually changed`);
+      }
+    }
+  }
+} catch {
+  violations.push("public/round-notes.json - missing or not valid JSON; every build ships its round notes");
+}
+
 if (violations.length > 0) {
   console.error("repo check FAILED - the canonical repo takes game code, assets and public docs only:\n");
   for (const v of violations.sort()) console.error(`  x ${v}`);

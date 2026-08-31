@@ -27,6 +27,7 @@ src/textures.ts            runtime-generated textures, including the hazard's si
 src/audio.ts               Web Audio: drone, chain-scaled collect voice, radiance chord, hit, arpeggios, ending chord
 public/assets/             committed assets you generated (images, audio) - copied verbatim into dist/
 src/global.d.ts            the window.__glow test hook contract
+src/round-notes.ts         the judge-facing "what changed this round" badge (reads public/round-notes.json)
 src/replay.ts              replay mode: fixed timestep, seeded RNG, injected input, offline audio (loads only under ?glow-replay=)
 scripts/replay.mjs         the replay harness - video, audio, contact sheet, spectrogram, timeline, feel metrics
 scripts/replay-gate.mjs    the six personas as a pass/fail gate, part of `npm test`
@@ -36,7 +37,8 @@ tests/smoke.spec.ts        the smoke tests every build must pass
 tests/chain.test.ts        fast deterministic chain timing/reset/reward contract
 tests/reach.test.ts        the reach economy: a pull spends the glow, only travel rekindles it
 tests/levels.test.ts       the route contract - the required motes are safe, the optional ones are not
-scripts/check-workspace.mjs   repo hygiene guard behind `npm run check`
+public/round-notes.json    your round number + 4-5 one-liners on what the round changed; overwrite every round
+scripts/check-workspace.mjs   repo hygiene guard behind `npm run check` - also validates round-notes.json
 deploy.sh                  publish a build to one of the four slots
 ```
 

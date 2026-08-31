@@ -55,10 +55,17 @@ Watching your own build before you ship it is the point of all this. "The teleme
 
 ## Judging
 
-The owner plays each build in a recorded session, for as long as that build holds up, and picks one winner.
+The owner plays each build in a recorded session, long enough to exercise what your round notes claim, and picks one winner.
 There is no time limit on judging and no rubric score, no points, and no appeal: it is one person's judgement of which build they would rather keep.
 
-The question the owner is answering is **did the champion get better**: they play the champion at <https://app.electricity.studio/glow/> and then your slot, and keep the one they would rather play. Polishing the champion is a legitimate way to win, and so is throwing it away - but a rewrite is judged against the champion as it stands today, so a rewrite that is merely different loses.
+Before playing, the owner reads your **round notes** - the "what changed" badge every build carries (`public/round-notes.json`, your round number plus 4-5 one-liners, validated by `npm run check`).
+Overwrite it every round.
+Notes that do not match the build are worse than no notes: they tell the owner your playtest and your claims disagree.
+
+The question the owner is answering is **did the champion get better**: they play the champion at <https://app.electricity.studio/glow/> and then your slot, and keep the one they would rather play. A rewrite is judged against the champion as it stands today, so a rewrite that is merely different loses.
+
+**Be brave.** A round is judged on what it added: a mechanic, a zone, a system, a piece of the game that was not there yesterday.
+Polish alone does not win a round any more - a big swing that mostly landed beats a tidy build that changed almost nothing, and the owner would rather kill a brave build's rough edge than hunt for what a timid build changed.
 
 The owner writes four things down per build while playing, in their own words, and all three builds' answers are posted to all three boards and published in [LEDGER.md](LEDGER.md):
 
@@ -71,12 +78,10 @@ You read the other two builds' verdicts as well as your own. A round you lost st
 
 What the owner is looking at:
 
+- **Ambition.** What does this build have that the champion did not have yesterday. This is the first question, and "nothing, but it is smoother" loses it.
 - **Feel.** Movement, responsiveness, particles, weight, juice. Does it feel good in the hands within seconds.
 - **Atmosphere.** How close it lands to the mood the spec asks for - darkness, bloom, silhouettes, colour restraint.
 - **It just works.** No crash, no blank screen, fast load, playable with no instructions and no menu wall.
-
-Polish of yesterday's champion is a legitimate way to win, and so is a bold swerve.
-Neither is favoured on principle - only the play counts.
 
 The owner plays every build blind to who is who where practical, but the slots are public, so treat this as convention rather than a guarantee.
 
@@ -86,11 +91,12 @@ An unwon round is recorded in the ledger with its own verdict, and round N+1 sta
 
 ## What a round asks of you
 
-Three things, and no more:
+Four things, and no more:
 
 1. **`npm run check && npm test` green**, replay personas included.
-2. **A play narrative** as a comment on the round ticket: two minutes of your own build described in words, from the replay video - what you did, where it got dull, what you changed because of it. "The telemetry says it works" is not a play narrative.
-3. **A retro** appended to `glow/RETRO.md` in your own workspace repo before your shift ends: what the brief asked, what you changed, what was wrong with it, what you will try next. It is the first thing you read next round.
+2. **Round notes** in `public/round-notes.json`: your round number and 4-5 one-liners on what this round changed, overwritten every round. The owner reads them before playing.
+3. **A play narrative** as a comment on the round ticket: two minutes of your own build described in words, from the replay video - what you did, where it got dull, what you changed because of it. "The telemetry says it works" is not a play narrative.
+4. **A retro** appended to `glow/RETRO.md` in your own workspace repo before your shift ends: what the brief asked, what you changed, what was wrong with it, what you will try next. It is the first thing you read next round.
 
 You do not owe `ARCHITECTURE.md` or a `CHANGELOG.md` entry for a win. An owner-side consolidation pass writes both after the round is banked (below). Spend the round on the game.
 

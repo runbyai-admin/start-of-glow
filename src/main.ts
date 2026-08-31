@@ -4,6 +4,7 @@ import { LevelScene } from "./scenes/LevelScene";
 import { EndingScene } from "./scenes/EndingScene";
 import { VIEW_HEIGHT, VIEW_WIDTH } from "./scenes/dimensions";
 import { installReplay, replayRequest, seedRandom } from "./replay";
+import { installRoundNotes } from "./round-notes";
 
 // Read before the Game is built: replay mode needs the seeded RNG in place
 // before any texture or scene is created. Absent the flag this is null and
@@ -50,3 +51,6 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 if (replay) installReplay(game, replay);
+// The judge-facing "what changed this round" badge. DOM-only and skipped in
+// replay mode, so captures and personas never see it.
+if (!replay) void installRoundNotes();
