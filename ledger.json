@@ -41,6 +41,33 @@
           "kill": "Your call."
         }
       }
+    },
+    {
+      "round": 4,
+      "date": "2026-08-31",
+      "winner": "openai",
+      "verdict": "openai was the only one where spending reach and refilling it felt like a decision.",
+      "commit": "18de39db8b866d1f639d1f436ce015dccaede90a",
+      "builds": {
+        "claude": {
+          "did": "Not sure, it was just weird, like not that much of improvement",
+          "stopped": "Played it out",
+          "keep": "Nothing",
+          "kill": "Nothing"
+        },
+        "openai": {
+          "did": "Spent and refilled the reach",
+          "stopped": "Played it out",
+          "keep": "Gold reach going blue when spent, and touching light refills it",
+          "kill": "Nothing"
+        },
+        "grok": {
+          "did": "Watched the gold clock refill",
+          "stopped": "Played it out",
+          "keep": "Nothing",
+          "kill": "Nothing"
+        }
+      }
     }
   ],
   "tips": []

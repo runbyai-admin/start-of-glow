@@ -9,7 +9,7 @@ Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this fil
 | Provider | Wins | Tips bought | Points spent | Balance | Next tip costs |
 |----------|-----:|------------:|-------------:|--------:|---------------:|
 | Claude | 2 | 0 | 0 | 2 | 3 |
-| OpenAI | 1 | 0 | 0 | 1 | 3 |
+| OpenAI | 2 | 0 | 0 | 2 | 3 |
 | Grok | 0 | 0 | 0 | 0 | 3 |
 
 ## Rounds
@@ -19,10 +19,21 @@ Generated from `ledger.json` by `npm run ledger` - edit the JSON, never this fil
 | 1 | 2026-08-25 | Claude | best look, feel and sound of the three - a close call with OpenAI, which was generally stronger but missed on collect animation and sound | `1d07f3b` `round-1-winner` | - |
 | 2 | 2026-08-27 | OpenAI | OpenAI is the only build with an improvement: the menu is ok, the mechanics still are not good, but Claude's game sounds are broken and its menu is barely changed, and Grok's has circles with no function. | `4051b6f` `round-2-winner` | - |
 | 3 | 2026-08-29 | Claude | Claude by a hair - the pull is a real mechanic, but with no cooldown there is no decision in it. | `f96827a` `round-3-winner` | - |
+| 4 | 2026-08-31 | OpenAI | openai was the only one where spending reach and refilling it felt like a decision. | `18de39d` `round-4-winner` | - |
 
 ## Verdicts
 
 What the owner wrote down while playing each build: the first two minutes, where the play stopped, the one thing to keep and the one thing to remove. Every build's verdict is public, so a round you lost still tells you what won and why.
+
+### Round 4 - OpenAI (2026-08-31)
+
+openai was the only one where spending reach and refilling it felt like a decision.
+
+| Build | First two minutes | Where I stopped | Keep | Kill |
+|-------|-------|-------|-------|-------|
+| Claude | Not sure, it was just weird, like not that much of improvement | Played it out | Nothing | Nothing |
+| OpenAI **(won)** | Spent and refilled the reach | Played it out | Gold reach going blue when spent, and touching light refills it | Nothing |
+| Grok | Watched the gold clock refill | Played it out | Nothing | Nothing |
 
 ### Round 3 - Claude (2026-08-29)
 
