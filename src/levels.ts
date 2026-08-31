@@ -145,6 +145,75 @@ export const LEVEL_2_LAYOUT: LevelLayout = {
   ],
 };
 
+/**
+ * Level 3 keeps the storm and the fastest shadows, but makes its required path
+ * legible and fair. Six patrols alternate above and below a narrow clearing;
+ * the first sixteen motes trace the clearing at least 200px from every patrol
+ * segment, while one optional mote sits inside each shadow pocket. A careful
+ * player can finish cleanly; a flawless player still has six real risks to
+ * choose from.
+ */
+export const LEVEL_3_LAYOUT: LevelLayout = {
+  motes: [
+    // Required clearing: a quiet ribbon between alternating storm pockets.
+    { x: 340, y: 380 },
+    { x: 470, y: 370 },
+    { x: 600, y: 360 },
+    { x: 730, y: 350 },
+    { x: 850, y: 340 },
+    { x: 980, y: 350 },
+    { x: 1090, y: 360 },
+    { x: 1220, y: 370 },
+    { x: 1340, y: 360 },
+    { x: 1450, y: 350 },
+    { x: 1580, y: 340 },
+    { x: 1700, y: 350 },
+    { x: 1840, y: 360 },
+    { x: 1960, y: 350 },
+    { x: 2070, y: 340 },
+    { x: 2200, y: 320 },
+    // Flawless choices: one mote deep inside each fast patrol.
+    { x: 520, y: 105 },
+    { x: 870, y: 615 },
+    { x: 1200, y: 105 },
+    { x: 1500, y: 615 },
+    { x: 1790, y: 105 },
+    { x: 2160, y: 615 },
+  ],
+  hazards: [
+    [
+      { x: 360, y: 70 },
+      { x: 650, y: 70 },
+      { x: 520, y: 140 },
+    ],
+    [
+      { x: 720, y: 650 },
+      { x: 1030, y: 650 },
+      { x: 870, y: 580 },
+    ],
+    [
+      { x: 1050, y: 70 },
+      { x: 1350, y: 70 },
+      { x: 1200, y: 140 },
+    ],
+    [
+      { x: 1350, y: 650 },
+      { x: 1640, y: 650 },
+      { x: 1500, y: 580 },
+    ],
+    [
+      { x: 1640, y: 70 },
+      { x: 1940, y: 70 },
+      { x: 1790, y: 140 },
+    ],
+    [
+      { x: 1950, y: 650 },
+      { x: 2340, y: 650 },
+      { x: 2160, y: 580 },
+    ],
+  ],
+};
+
 export const LEVELS: LevelConfig[] = [
   {
     index: 1,
@@ -166,7 +235,16 @@ export const LEVELS: LevelConfig[] = [
     mood: "deep-night",
     layout: LEVEL_2_LAYOUT,
   },
-  { index: 3, name: "The Last Clearing", moteCount: 22, requiredMotes: 16, hazardCount: 6, hazardSpeed: 120, mood: "storm-dark" },
+  {
+    index: 3,
+    name: "The Last Clearing",
+    moteCount: 22,
+    requiredMotes: 16,
+    hazardCount: 6,
+    hazardSpeed: 120,
+    mood: "storm-dark",
+    layout: LEVEL_3_LAYOUT,
+  },
 ];
 
 export function levelFor(index: number): LevelConfig | undefined {
