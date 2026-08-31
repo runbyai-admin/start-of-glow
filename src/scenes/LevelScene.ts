@@ -10,7 +10,7 @@ import {
 import type { Ambience } from "../audio";
 import { levelFor, LEVELS, type LevelConfig } from "../levels";
 import { VIEW_HEIGHT, VIEW_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from "./dimensions";
-import { advanceChain, CHAIN_CAP, CHAIN_WINDOW_MS, emptyChain, expireChain, resetChain, type ChainState } from "../chain";
+import { advanceChain, chainActiveForLevel, CHAIN_CAP, CHAIN_WINDOW_MS, emptyChain, expireChain, resetChain, type ChainState } from "../chain";
 import {
   REACH_MAX,
   REACH_MIN,
@@ -1038,8 +1038,14 @@ export class LevelScene extends Phaser.Scene {
    */
   private takeMote(arrival: MoteArrival): void {
     this.collected += 1;
-    this.advanceChain();
-    this.ambience.chime(this.collected, this.chainState.count);
+    // The opening belongs to the pull and its cost. The inherited five-light
+    // chain is a useful escalation later, but its corner timer and radiance
+    // wave would introduce a second resource inside the first ten seconds.
+    // The final clearing earns that extra layer; the first two levels keep the
+    // chain completely quiet even for a reacher who clears level 1 in six seconds.
+    const chainActive = chainActiveForLevel(this.config.index);
+    if (chainActive) this.advanceChain();
+    this.ambience.chime(this.collected, chainActive ? this.chainState.count : 1);
     const wasReady = reachReady(this.reach);
     this.setReach(restoreReach(this.reach, arrival));
     if (arrival === "touched") this.touchedMotes += 1;

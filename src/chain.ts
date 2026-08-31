@@ -1,5 +1,11 @@
 export const CHAIN_CAP = 5;
 export const CHAIN_WINDOW_MS = 4000;
+export const CHAIN_START_LEVEL = 3;
+
+/** Keep the opening pull lesson free of a second resource/timer. */
+export function chainActiveForLevel(level: number): boolean {
+  return level >= CHAIN_START_LEVEL;
+}
 
 export interface ChainState {
   count: number;

@@ -142,8 +142,8 @@ test("starting the game loads level 1, and the light-being follows input and col
     await page.waitForTimeout(90);
   };
 
-  // First pass: the opening arc. Level 1 is hand-authored (see levels.ts)
-  // and its first five motes line a rising arc from the start point with no
+  // First pass: the opening curve. Level 1 is hand-authored (see levels.ts)
+  // and its first five motes line a broad safe curve from the start point with no
   // hazard anywhere near them - so "the wisp follows input and collects" is
   // provable deterministically here, no hazard-collision luck involved.
   // The camera follows the wisp, so world->screen needs the live scroll
@@ -152,10 +152,10 @@ test("starting the game loads level 1, and the light-being follows input and col
   const arc: Array<[number, number]> = [
     [250, 460],
     [330, 430],
-    [430, 355],
-    [545, 305],
-    [665, 290],
-    [780, 510],
+    [480, 520],
+    [630, 420],
+    [780, 400],
+    [930, 400],
   ];
   for (const [wx, wy] of arc) {
     for (let i = 0; i < 2; i += 1) {
@@ -171,7 +171,7 @@ test("starting the game loads level 1, and the light-being follows input and col
   expect(afterArc?.level).toBe(1);
   expect(afterArc?.collected, "tracing the opening arc must collect motes").toBeGreaterThan(0);
   expect(afterArc?.glowRadius).toBeGreaterThan(260);
-  expect(afterArc?.chain, "real pickups must wire into the lumen-chain model").toBeGreaterThan(0);
+  expect(afterArc?.chain, "the opening must defer the lumen chain until the final clearing").toBe(0);
 
   // Optional-collection wiring: level 1 opens its beacon at 10 of 14 motes
   // (see levels.ts), and state remains internally consistent after input.
