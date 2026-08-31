@@ -146,70 +146,69 @@ export const LEVEL_2_LAYOUT: LevelLayout = {
 };
 
 /**
- * Level 3 keeps the storm and the fastest shadows, but makes its required path
- * legible and fair. Six patrols alternate above and below a narrow clearing;
- * the first sixteen motes trace the clearing at least 200px from every patrol
- * segment, while one optional mote sits inside each shadow pocket. A careful
- * player can finish cleanly; a flawless player still has six real risks to
- * choose from.
+ * Level 3 turns the reach economy into terrain. Three pairs of fast shadows
+ * close the middle of the forest. The first sixteen motes take the long safe
+ * route below, above, then below those gates; six shortcut motes sit directly
+ * inside them. A full reach can buy dangerous light across a gate and shorten
+ * the trip. A spent reach has to take the visible way around.
  */
 export const LEVEL_3_LAYOUT: LevelLayout = {
   motes: [
-    // Required clearing: a quiet ribbon between alternating storm pockets.
-    { x: 340, y: 380 },
-    { x: 470, y: 370 },
-    { x: 600, y: 360 },
-    { x: 730, y: 350 },
-    { x: 850, y: 340 },
-    { x: 980, y: 350 },
-    { x: 1090, y: 360 },
-    { x: 1220, y: 370 },
-    { x: 1340, y: 360 },
-    { x: 1450, y: 350 },
-    { x: 1580, y: 340 },
-    { x: 1700, y: 350 },
-    { x: 1840, y: 360 },
-    { x: 1960, y: 350 },
-    { x: 2070, y: 340 },
-    { x: 2200, y: 320 },
-    // Flawless choices: one mote deep inside each fast patrol.
-    { x: 520, y: 105 },
-    { x: 870, y: 615 },
-    { x: 1200, y: 105 },
-    { x: 1500, y: 615 },
-    { x: 1790, y: 105 },
-    { x: 2160, y: 615 },
+    // Required detour: below gate one, above gate two, below gate three.
+    { x: 280, y: 600 },
+    { x: 420, y: 620 },
+    { x: 580, y: 600 },
+    { x: 700, y: 600 },
+    { x: 800, y: 600 },
+    { x: 800, y: 120 },
+    { x: 900, y: 120 },
+    { x: 1020, y: 120 },
+    { x: 1150, y: 100 },
+    { x: 1280, y: 120 },
+    { x: 1400, y: 120 },
+    { x: 1500, y: 120 },
+    { x: 1500, y: 600 },
+    { x: 1600, y: 600 },
+    { x: 1800, y: 620 },
+    { x: 2180, y: 600 },
+    // Paid shortcuts: visible inside the paired patrols, safe only at range.
+    { x: 420, y: 340 },
+    { x: 500, y: 380 },
+    { x: 1120, y: 340 },
+    { x: 1200, y: 380 },
+    { x: 1820, y: 340 },
+    { x: 1900, y: 380 },
   ],
   hazards: [
     [
-      { x: 360, y: 70 },
-      { x: 650, y: 70 },
-      { x: 520, y: 140 },
+      { x: 300, y: 320 },
+      { x: 600, y: 320 },
+      { x: 450, y: 390 },
     ],
     [
-      { x: 720, y: 650 },
-      { x: 1030, y: 650 },
-      { x: 870, y: 580 },
+      { x: 320, y: 400 },
+      { x: 580, y: 400 },
+      { x: 450, y: 330 },
     ],
     [
-      { x: 1050, y: 70 },
-      { x: 1350, y: 70 },
-      { x: 1200, y: 140 },
+      { x: 1000, y: 320 },
+      { x: 1300, y: 320 },
+      { x: 1150, y: 390 },
     ],
     [
-      { x: 1350, y: 650 },
-      { x: 1640, y: 650 },
-      { x: 1500, y: 580 },
+      { x: 1020, y: 400 },
+      { x: 1280, y: 400 },
+      { x: 1150, y: 330 },
     ],
     [
-      { x: 1640, y: 70 },
-      { x: 1940, y: 70 },
-      { x: 1790, y: 140 },
+      { x: 1700, y: 320 },
+      { x: 1990, y: 320 },
+      { x: 1850, y: 390 },
     ],
     [
-      { x: 1950, y: 650 },
-      { x: 2340, y: 650 },
-      { x: 2160, y: 580 },
+      { x: 1720, y: 400 },
+      { x: 1970, y: 400 },
+      { x: 1850, y: 330 },
     ],
   ],
 };

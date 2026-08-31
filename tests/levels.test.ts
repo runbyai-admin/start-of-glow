@@ -51,8 +51,9 @@ function assertRouteContract(
   assert.equal(layout.hazards.length, hazardCount);
 
   const safe = layout.motes.slice(0, safeCount);
-  for (const [index, start] of safe.slice(0, -1).entries()) {
-    const end = safe[index + 1];
+  const route = safe.concat({ x: 2202, y: 245 });
+  for (const [index, start] of route.slice(0, -1).entries()) {
+    const end = route[index + 1];
     const clearance = Math.min(
       ...layout.hazards.flatMap((loop) =>
         loop.map((hazardStart, waypoint) =>
