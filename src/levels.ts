@@ -45,13 +45,13 @@ export const LEVEL_1_LAYOUT: LevelLayout = {
   motes: [
     // Required opening route: always at least 200px from either patrol.
     { x: 330, y: 430 },
-    { x: 480, y: 460 },
-    { x: 630, y: 450 },
-    { x: 780, y: 420 },
-    { x: 930, y: 370 },
-    { x: 1100, y: 330 },
-    { x: 1280, y: 310 },
-    { x: 1500, y: 300 },
+    { x: 480, y: 520 },
+    { x: 630, y: 420 },
+    { x: 780, y: 400 },
+    { x: 930, y: 400 },
+    { x: 1100, y: 600 },
+    { x: 1230, y: 600 },
+    { x: 1420, y: 290 },
     { x: 1800, y: 280 },
     { x: 2150, y: 260 },
     // Optional paid light: two motes inside each patrol pocket.
